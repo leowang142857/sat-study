@@ -1,4 +1,4 @@
-// Copies the OCR worker, wasm core and English language data into public/ so OCR works offline.
+// Copies the OCR worker, wasm core and English language data (plus pdf.js character maps) into public/ so they work offline.
 import { cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -18,3 +18,7 @@ const lang = join(root, 'node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.
 if (existsSync(lang)) cpSync(lang, join(out, 'lang', 'eng.traineddata.gz'))
 
 console.log('OCR assets copied to public/tesseract')
+
+// Character maps let pdf.js read text from PDFs that use CJK / non-embedded CID fonts. Fetched only when needed.
+cpSync(join(root, 'node_modules/pdfjs-dist/cmaps'), join(root, 'public', 'pdfjs', 'cmaps'), { recursive: true })
+console.log('PDF character maps copied to public/pdfjs')

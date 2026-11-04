@@ -33,6 +33,8 @@ interface StoreValue {
   exportBackup: () => void
   importBackup: (file: File) => Promise<{ mistakes: number; practice: number; words: number }>
   importPracticeSet: (file: File) => Promise<PracticeImportSummary>
+  /** Already-parsed `{ name, questions }` (e.g. from a PDF). Same rules as a practice-set JSON. */
+  importPracticeData: (raw: unknown) => Promise<PracticeImportSummary>
 }
 
 const StoreContext = createContext<StoreValue | null>(null)
@@ -143,14 +145,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [saveMistakes, saveWords],
   )
 
-  const importPracticeSet = useCallback(
-    async (file: File) => {
-      let raw: unknown
-      try {
-        raw = JSON.parse(await file.text())
-      } catch {
-        throw new Error('bad-json')
-      }
+  const importPracticeData = useCallback(
+    async (raw: unknown) => {
       const parsed = buildPracticeItems(raw, mistakes)
       if (parsed.added === 0 && parsed.duplicate === 0) {
         throw new Error('no-questions')
@@ -159,6 +155,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return parsed
     },
     [mistakes, saveMistakes],
+  )
+
+  const importPracticeSet = useCallback(
+    async (file: File) => {
+      let raw: unknown
+      try {
+        raw = JSON.parse(await file.text())
+      } catch {
+        throw new Error('bad-json')
+      }
+      return importPracticeData(raw)
+    },
+    [importPracticeData],
   )
 
   const value = useMemo(
@@ -176,8 +185,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       exportBackup,
       importBackup,
       importPracticeSet,
+      importPracticeData,
     }),
-    [ready, mistakes, words, saveMistake, saveMistakes, deleteMistake, saveWord, saveWords, deleteWord, rateWord, exportBackup, importBackup, importPracticeSet],
+    [ready, mistakes, words, saveMistake, saveMistakes, deleteMistake, saveWord, saveWords, deleteWord, rateWord, exportBackup, importBackup, importPracticeSet, importPracticeData],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

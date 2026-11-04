@@ -48,7 +48,7 @@ const zh = {
     import: '导入备份',
     importTitle: '恢复错题和单词。不会把题集文件写进错题本。',
     importSet: '导入题集',
-    importSetTitle: '把 JSON 题目导入为练习题集，不记入错题',
+    importSetTitle: '把 JSON 或 PDF 题目导入为练习题集，不记入错题',
     done: (mistakes: number, words: number) => `导入完成：${mistakes} 道错题，${words} 个单词`,
     doneWithPractice: (mistakes: number, practice: number, words: number) => `导入完成：${mistakes} 道错题，${practice} 道题集题目，${words} 个单词`,
     failed: (message: string) => `导入失败：${message}`,
@@ -56,6 +56,9 @@ const zh = {
     badJson: '文件不是有效的 JSON',
     practiceFile: '这是题集文件。请点「导入题集」，这样不会记入错题本。',
     noQuestions: '没有可导入的题目。每题至少要有文章或题干，以及正确答案。',
+    pdfInvalid: '文件不是有效的 PDF',
+    pdfPassword: 'PDF 有密码保护，请先去掉密码再导入',
+    pdfNoText: 'PDF 里没有可读取的文字，自动识别也没认出内容。请用「录入错题 / 录入练习题」截图识别，或改用 JSON。',
     practiceImport: (r: { name: string; added: number; duplicate: number; invalid: number; ignoredWords: number }) => {
       const parts = [`题集「${r.name}」新增 ${r.added} 题`]
       if (r.duplicate) parts.push(`跳过重复 ${r.duplicate} 题`)
@@ -330,9 +333,11 @@ const zh = {
     summary: (questions: number, sets: number) => `共 ${questions} 道练习题 · ${sets} 个题集。这里的题不是错题，不会出现在错题本和错题统计里。`,
     import: '导入题集',
     add: '+ 录入练习题',
-    format: '题集 JSON 格式',
+    format: '题集格式（JSON / PDF）',
     formatHint: '用「导入题集」会把题目存成练习题。同一文件再导入会跳过重复题。错题备份请用右上角「导入备份」，两条路径互不覆盖。',
-    empty: '还没有题集。点「导入题集」选一个 JSON，或「录入练习题」逐题添加。',
+    pdfHint:
+      'PDF：题号写成「1.」「1)」或「Question 1」，选项写成「A)」「(A)」或「A.」。答案可以写在题后（Answer: B），也可以放在末尾答案页（Answer Key：1. B 2. C）。没有答案的题会跳过。双栏排版、图表和下划线读不出来，扫描件会自动识别文字但较慢。',
+    empty: '还没有题集。点「导入题集」选一个 JSON 或 PDF，或「录入练习题」逐题添加。',
     chip: '题集',
     rwCount: (n: number) => `阅读文法 ${n}`,
     mathCount: (n: number) => `数学 ${n}`,
@@ -347,6 +352,26 @@ const zh = {
     examTitle: (name: string) => `题集：${name}`,
     untitled: '未命名题集',
     correct: '正确答案',
+  },
+  pdf: {
+    title: '从 PDF 导入题集',
+    open: '打开 PDF…',
+    reading: (page: number, total: number) => `读取文字：第 ${page} / ${total} 页…`,
+    ocr: (page: number, total: number) => `扫描件，正在识别：第 ${page} / ${total} 页（每页要几秒）…`,
+    found: (n: number, withAnswer: number) => `找到 ${n} 道题，其中 ${withAnswer} 道有答案。`,
+    scanned: '这份 PDF 是扫描件，文字是自动识别的，导入后请在题集里核对。',
+    skipped: (read: number, left: number) => `扫描件只识别了前 ${read} 页，后面 ${left} 页没有读取。`,
+    missingAnswers: (n: number) => `${n} 道题没找到答案，会被跳过。可以在题后写「Answer: B」，或在 PDF 末尾加答案页（Answer Key：1. B 2. C）。`,
+    noAnswers: '没有一道题找到答案，无法导入（题集需要正确答案才能判分）。请在 PDF 里加答案，或改用 JSON。',
+    noQuestions: '没在 PDF 里找到题目。需要题号（1. / Question 1）和选项（A) / (A) / A.）。版面复杂的 PDF 请用截图识别或 JSON。',
+    name: '题集名称',
+    nameHint: 'PDF 没有明确标题时默认用文件名，可以改。',
+    noChoices: '选项未识别',
+    noAnswer: '无答案',
+    answer: (a: string) => `答案 ${a}`,
+    import: (n: number) => `导入 ${n} 题`,
+    importing: '导入中…',
+    cancel: '取消',
   },
   cropper: {
     title: '框选图表',
@@ -402,7 +427,7 @@ const en: Widen<typeof zh> = {
     import: 'Import',
     importTitle: 'Restore mistakes and words. A practice-set file is not written into the mistake book.',
     importSet: 'Import set',
-    importSetTitle: 'Import JSON questions as a practice set. They are not counted as mistakes.',
+    importSetTitle: 'Import questions from JSON or PDF as a practice set. They are not counted as mistakes.',
     done: (mistakes, words) =>
       `Imported ${mistakes} mistake${mistakes === 1 ? '' : 's'} and ${words} word${words === 1 ? '' : 's'}`,
     doneWithPractice: (mistakes, practice, words) =>
@@ -412,6 +437,9 @@ const en: Widen<typeof zh> = {
     badJson: 'the file is not valid JSON',
     practiceFile: 'This is a practice-set file. Use “Import set” so it is not added to the mistake book.',
     noQuestions: 'No questions to import. Each question needs a passage or stem, and a correct answer.',
+    pdfInvalid: 'the file is not a valid PDF',
+    pdfPassword: 'the PDF is password-protected. Remove the password and try again.',
+    pdfNoText: 'the PDF has no readable text, and text recognition found nothing either. Add questions from screenshots instead, or use JSON.',
     practiceImport: (r) => {
       const parts = [`Set “${r.name}”: ${r.added} new`]
       if (r.duplicate) parts.push(`${r.duplicate} duplicate${r.duplicate === 1 ? '' : 's'} skipped`)
@@ -686,9 +714,11 @@ const en: Widen<typeof zh> = {
     summary: (questions, sets) => `${questions} practice question${questions === 1 ? '' : 's'} · ${sets} set${sets === 1 ? '' : 's'}. These are not mistakes and do not show up in the mistake book or mistake stats.`,
     import: 'Import set',
     add: '+ Add practice question',
-    format: 'Practice-set JSON',
+    format: 'Practice-set format (JSON / PDF)',
     formatHint: '“Import set” stores questions as practice. Importing the same file again skips duplicates. Mistake backups use “Import” in the header. The two paths do not overwrite each other.',
-    empty: 'No sets yet. Use “Import set” to choose a JSON file, or “Add practice question” to enter one.',
+    pdfHint:
+      'PDF: number questions “1.”, “1)”, or “Question 1”, and label choices “A)”, “(A)”, or “A.”. Put the answer after each question (Answer: B) or in an answer key at the end (Answer Key: 1. B 2. C). Questions without an answer are skipped. Two-column layouts, charts, and underlines are not read. Scanned PDFs are recognized automatically, but slowly.',
+    empty: 'No sets yet. Use “Import set” to choose a JSON or PDF file, or “Add practice question” to enter one.',
     chip: 'Set',
     rwCount: (n) => `Reading & Writing ${n}`,
     mathCount: (n) => `Math ${n}`,
@@ -703,6 +733,27 @@ const en: Widen<typeof zh> = {
     examTitle: (name) => `Set: ${name}`,
     untitled: 'Untitled set',
     correct: 'Correct answer',
+  },
+  pdf: {
+    title: 'Import a set from PDF',
+    open: 'Opening the PDF…',
+    reading: (page, total) => `Reading text: page ${page} of ${total}…`,
+    ocr: (page, total) => `Scanned PDF, recognizing page ${page} of ${total} (a few seconds each)…`,
+    found: (n, withAnswer) => `Found ${n} question${n === 1 ? '' : 's'}, ${withAnswer} with an answer.`,
+    scanned: 'This PDF is a scan, so its text was recognized automatically. Check the questions after importing.',
+    skipped: (read, left) => `Only the first ${read} scanned pages were read. The last ${left} were skipped.`,
+    missingAnswers: (n) =>
+      `${n} question${n === 1 ? ' has' : 's have'} no answer and will be skipped. Write “Answer: B” after a question, or add an answer key at the end (Answer Key: 1. B 2. C).`,
+    noAnswers: 'No question has an answer, so nothing can be imported (practice sets need answers for grading). Add answers to the PDF, or use JSON.',
+    noQuestions: 'No questions found in this PDF. It needs question numbers (1. / Question 1) and choices (A) / (A) / A.). For complex layouts, use screenshots or JSON.',
+    name: 'Set name',
+    nameHint: 'Defaults to the file name when the PDF has no clear title. You can change it.',
+    noChoices: 'choices not found',
+    noAnswer: 'no answer',
+    answer: (a) => `Answer ${a}`,
+    import: (n) => `Import ${n} question${n === 1 ? '' : 's'}`,
+    importing: 'Importing…',
+    cancel: 'Cancel',
   },
   cropper: {
     title: 'Crop a figure',
@@ -761,5 +812,8 @@ export function importErrorDetail(err: unknown, t: Messages): string {
   if (message === 'not-backup') return t.backup.notBackup
   if (message === 'practice-file') return t.backup.practiceFile
   if (message === 'no-questions') return t.backup.noQuestions
+  if (message === 'pdf-invalid') return t.backup.pdfInvalid
+  if (message === 'pdf-password') return t.backup.pdfPassword
+  if (message === 'pdf-no-text') return t.backup.pdfNoText
   return message
 }
