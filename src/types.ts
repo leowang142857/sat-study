@@ -30,6 +30,14 @@ export interface Mistake {
   tags: string[]
   mastered: boolean
   reviews: ReviewRecord[]
+  /**
+   * 'wrong' — a miss in the 错题本.
+   * 'practice' — a 题集 item, not a miss.
+   * Omitted on older records; those stay 错题.
+   */
+  kind?: 'wrong' | 'practice'
+  /** Title of the practice set this item belongs to. Only used when kind is 'practice'. */
+  setName?: string
 }
 
 export interface SrsState {

@@ -3,6 +3,7 @@ import type { Letter, Mistake, Section } from '../types'
 import { LETTERS } from '../types'
 import { QUESTION_TYPES } from '../constants'
 import { uid } from '../db'
+import { isPracticeItem } from '../questions'
 import { useStore } from '../store'
 import { ocrScreenshot } from '../ocr'
 import { ImageDropZone } from './ImageDropZone'
@@ -10,10 +11,12 @@ import { FigureCropper } from './FigureCropper'
 import { RichText } from './RichText'
 
 const LAST_SOURCE_KEY = 'sat-study:last-source'
+const LAST_SET_KEY = 'sat-study:last-set'
 const stripQ = (s: string) => s.replace(/\s*·\s*Q\d+$/, '')
 
-export function blankMistake(): Mistake {
+export function blankMistake(kind: 'wrong' | 'practice' = 'wrong'): Mistake {
   const now = Date.now()
+  const practice = kind === 'practice'
   return {
     id: uid(),
     createdAt: now,
@@ -33,6 +36,8 @@ export function blankMistake(): Mistake {
     tags: [],
     mastered: false,
     reviews: [],
+    kind,
+    setName: practice ? (localStorage.getItem(LAST_SET_KEY) ?? '') : undefined,
   }
 }
 
@@ -50,7 +55,10 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
   const [ocrBusy, setOcrBusy] = useState(false)
   const [cropping, setCropping] = useState<string | null>(null)
   const passageRef = useRef<HTMLTextAreaElement>(null)
-  const sources = useMemo(() => [...new Set(mistakes.map((x) => stripQ(x.source)).filter(Boolean))], [mistakes])
+  const practice = isPracticeItem(initial)
+  const sameKind = useMemo(() => mistakes.filter((x) => isPracticeItem(x) === practice), [mistakes, practice])
+  const sources = useMemo(() => [...new Set(sameKind.map((x) => stripQ(x.source)).filter(Boolean))], [sameKind])
+  const setNames = useMemo(() => [...new Set(sameKind.map((x) => x.setName?.trim()).filter((x): x is string => !!x))], [sameKind])
 
   const set = <K extends keyof Mistake>(k: K, v: Mistake[K]) => setM((p) => ({ ...p, [k]: v }))
   const setChoice = (l: Letter, v: string) => setM((p) => ({ ...p, choices: { ...p.choices, [l]: v } }))
@@ -68,7 +76,7 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
         question: r.question || p.question,
         format: r.choices ? 'mc' : p.format,
         choices: r.choices ?? p.choices,
-        myAnswer: p.myAnswer || r.selected,
+        myAnswer: practice ? '' : p.myAnswer || r.selected,
         figures: p.figures.length ? p.figures : r.figures,
       }))
       const notes = [r.choices ? '识别完成，请核对文字（特别是画线部分和数字）' : '识别完成，但没找到 A–D 选项框，请手动补全选项']
@@ -95,12 +103,15 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
       .split(/[,，]/)
       .map((t) => t.trim())
       .filter(Boolean)
-    await saveMistake({ ...m, tags, updatedAt: Date.now() })
+    const setName = practice ? m.setName?.trim() || '未命名题集' : undefined
+    await saveMistake({ ...m, tags, updatedAt: Date.now(), kind: practice ? 'practice' : 'wrong', setName, myAnswer: practice ? '' : m.myAnswer })
     localStorage.setItem(LAST_SOURCE_KEY, stripQ(m.source))
+    if (practice && setName) localStorage.setItem(LAST_SET_KEY, setName)
     if (addAnother) {
-      const next = blankMistake()
+      const next = blankMistake(practice ? 'practice' : 'wrong')
       next.section = m.section
       next.source = stripQ(m.source)
+      if (practice) next.setName = setName
       setM(next)
       setTagText('')
       setOcrStatus('')
@@ -111,7 +122,7 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal wide">
         <div className="modal-head">
-          <h2>{isNew ? '录入错题' : '编辑错题'}</h2>
+          <h2>{practice ? (isNew ? '录入练习题' : '编辑练习题') : isNew ? '录入错题' : '编辑错题'}</h2>
           <button className="btn ghost" onClick={onClose}>
             关闭
           </button>
@@ -119,7 +130,12 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
 
         <div className="field">
           <div className="field-label">
-            1. 粘贴截图 <span className="hint">会自动识别成文字题目（左栏 → 文章，右栏 → 问题和选项，蓝框 → 你当时的答案）</span>
+            1. 粘贴截图{' '}
+            <span className="hint">
+              {practice
+                ? '会自动识别成文字题目（左栏 → 文章，右栏 → 问题和选项）。这是练习题，不会记入错题本。'
+                : '会自动识别成文字题目（左栏 → 文章，右栏 → 问题和选项，蓝框 → 你当时的答案）'}
+            </span>
           </div>
           <ImageDropZone
             images={m.images}
@@ -176,6 +192,17 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
               ))}
             </select>
           </label>
+          {practice && (
+            <label className="span2">
+              题集名称
+              <input list="set-names" value={m.setName ?? ''} placeholder="例：2024年3月 Practice Test 6" onChange={(e) => set('setName', e.target.value)} />
+              <datalist id="set-names">
+                {setNames.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </label>
+          )}
           <label className="span2">
             来源（卷子 · 模块 · 题号）
             <input list="sources" value={m.source} placeholder="例：2026年10月北美A卷 · RW Module 2 · Q16" onChange={(e) => set('source', e.target.value)} />
@@ -236,19 +263,26 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
               <input value={m.correct} onChange={(e) => set('correct', e.target.value)} placeholder="如 4.57 或 3/4" />
             )}
           </div>
-          <div className="field">
-            <div className="field-label">我当时的答案</div>
-            {m.format === 'mc' ? (
-              <LetterPicker value={m.myAnswer} onChange={(v) => set('myAnswer', v)} tone="wrong" allowEmpty />
-            ) : (
-              <input value={m.myAnswer} onChange={(e) => set('myAnswer', e.target.value)} placeholder="留空 = 没作答" />
-            )}
-          </div>
+          {!practice && (
+            <div className="field">
+              <div className="field-label">我当时的答案</div>
+              {m.format === 'mc' ? (
+                <LetterPicker value={m.myAnswer} onChange={(v) => set('myAnswer', v)} tone="wrong" allowEmpty />
+              ) : (
+                <input value={m.myAnswer} onChange={(e) => set('myAnswer', e.target.value)} placeholder="留空 = 没作答" />
+              )}
+            </div>
+          )}
         </div>
 
         <label className="field">
-          解析 / 我为什么错
-          <textarea rows={4} value={m.explanation} onChange={(e) => set('explanation', e.target.value)} placeholder="定位句在哪、陷阱是什么、下次怎么避免" />
+          {practice ? '解析（可选）' : '解析 / 我为什么错'}
+          <textarea
+            rows={4}
+            value={m.explanation}
+            onChange={(e) => set('explanation', e.target.value)}
+            placeholder={practice ? '做完再看的说明，不会当成错因' : '定位句在哪、陷阱是什么、下次怎么避免'}
+          />
         </label>
         <label className="field">
           标签（逗号分隔）
@@ -263,7 +297,7 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
             </button>
           )}
           <button className="btn primary" disabled={!canSave} onClick={() => save(false)}>
-            保存
+            {practice ? '保存到题集' : '保存'}
           </button>
         </div>
       </div>

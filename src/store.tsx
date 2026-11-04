@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { db } from './db'
+import { buildPracticeItems, type PracticeImportSummary } from './importPractice'
 import type { Mistake, Rating, Word } from './types'
 import { review } from './srs'
 import { seedMistakes, seedWords } from './seed'
@@ -12,6 +13,10 @@ interface Backup {
   exportedAt: string
   mistakes: Mistake[]
   words: Word[]
+  /** Set on a practice-set file so the 错题 backup importer can refuse it. */
+  kind?: 'wrong' | 'practice'
+  questions?: unknown[]
+  items?: unknown[]
 }
 
 interface StoreValue {
@@ -26,7 +31,8 @@ interface StoreValue {
   deleteWord: (id: string) => Promise<void>
   rateWord: (id: string, rating: Rating) => Promise<void>
   exportBackup: () => void
-  importBackup: (file: File) => Promise<{ mistakes: number; words: number }>
+  importBackup: (file: File) => Promise<{ mistakes: number; practice: number; words: number }>
+  importPracticeSet: (file: File) => Promise<PracticeImportSummary>
 }
 
 const StoreContext = createContext<StoreValue | null>(null)
@@ -47,6 +53,15 @@ function loadAll() {
     return [ms.map((m) => ({ ...m, figures: m.figures ?? [] })), ws]
   })()
   return initialLoad
+}
+
+function normalizeBackupMistake(m: Mistake): Mistake {
+  return {
+    ...m,
+    figures: m.figures ?? [],
+    kind: m.kind === 'practice' ? 'practice' : 'wrong',
+    setName: typeof m.setName === 'string' ? m.setName : undefined,
+  }
 }
 
 function upsert<T extends { id: string; createdAt: number }>(list: T[], items: T[]): T[] {
@@ -109,19 +124,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const importBackup = useCallback(
     async (file: File) => {
-      const data = JSON.parse(await file.text()) as Partial<Backup>
+      let data: Partial<Backup>
+      try {
+        data = JSON.parse(await file.text()) as Partial<Backup>
+      } catch {
+        throw new Error('文件不是有效的 JSON')
+      }
+      if (data.kind === 'practice' || ((data.questions || data.items) && !data.mistakes)) {
+        throw new Error('这是题集文件。请点「导入题集」，这样不会记入错题本。')
+      }
       if (data.app !== 'sat-study') throw new Error('这不是 sat-study 的备份文件')
-      const ms = (data.mistakes ?? []).map((m) => ({ ...m, figures: m.figures ?? [] }))
+      const ms = (data.mistakes ?? []).map(normalizeBackupMistake)
       const ws = data.words ?? []
       await Promise.all([saveMistakes(ms), saveWords(ws)])
-      return { mistakes: ms.length, words: ws.length }
+      const practice = ms.filter((m) => m.kind === 'practice').length
+      return { mistakes: ms.length - practice, practice, words: ws.length }
     },
     [saveMistakes, saveWords],
   )
 
+  const importPracticeSet = useCallback(
+    async (file: File) => {
+      let raw: unknown
+      try {
+        raw = JSON.parse(await file.text())
+      } catch {
+        throw new Error('文件不是有效的 JSON')
+      }
+      const parsed = buildPracticeItems(raw, mistakes)
+      if (parsed.added === 0 && parsed.duplicate === 0) {
+        throw new Error('没有可导入的题目。每题至少要有文章或题干，以及正确答案。')
+      }
+      if (parsed.items.length) await saveMistakes(parsed.items)
+      return parsed
+    },
+    [mistakes, saveMistakes],
+  )
+
   const value = useMemo(
-    () => ({ ready, mistakes, words, saveMistake, saveMistakes, deleteMistake, saveWord, saveWords, deleteWord, rateWord, exportBackup, importBackup }),
-    [ready, mistakes, words, saveMistake, saveMistakes, deleteMistake, saveWord, saveWords, deleteWord, rateWord, exportBackup, importBackup],
+    () => ({
+      ready,
+      mistakes,
+      words,
+      saveMistake,
+      saveMistakes,
+      deleteMistake,
+      saveWord,
+      saveWords,
+      deleteWord,
+      rateWord,
+      exportBackup,
+      importBackup,
+      importPracticeSet,
+    }),
+    [ready, mistakes, words, saveMistake, saveMistakes, deleteMistake, saveWord, saveWords, deleteWord, rateWord, exportBackup, importBackup, importPracticeSet],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
