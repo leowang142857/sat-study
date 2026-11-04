@@ -239,6 +239,15 @@ label select {
 .nav-actions {
   display: flex;
   gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.lang-toggle {
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+.lang-toggle button {
+  padding: 5px 10px;
 }
 .main {
   padding: 28px;
@@ -860,6 +869,8 @@ label select {
 .exam-tools {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
 .tool-btn {
   background: none;
@@ -1564,9 +1575,26 @@ label select {
 
 @media (max-width: 860px) {
   .topnav {
-    gap: 12px;
-    padding: 0 14px;
+    flex-wrap: wrap;
+    height: auto;
+    gap: 8px 12px;
+    padding: 8px 14px;
+    overflow: visible;
+  }
+  .brand {
+    order: 1;
+  }
+  .nav-actions {
+    order: 2;
+    margin-left: auto;
+  }
+  .topnav nav {
+    order: 3;
+    flex: 1 0 100%;
     overflow-x: auto;
+  }
+  .topnav nav a {
+    padding: 7px 8px;
   }
   .main {
     padding: 16px;

@@ -2,9 +2,11 @@ import { useMemo, useRef, useState } from 'react'
 import type { Letter, Mistake, Section } from '../types'
 import { LETTERS } from '../types'
 import { QUESTION_TYPES } from '../constants'
+import { qtypeLabel } from '../messages'
+import { useI18n } from '../i18n'
 import { uid } from '../db'
 import { useStore } from '../store'
-import { ocrScreenshot } from '../ocr'
+import { ocrScreenshot, type OcrStatus } from '../ocr'
 import { ImageDropZone } from './ImageDropZone'
 import { FigureCropper } from './FigureCropper'
 import { RichText } from './RichText'
@@ -44,6 +46,7 @@ interface Props {
 
 export function MistakeEditor({ initial, isNew, onClose }: Props) {
   const { mistakes, saveMistake } = useStore()
+  const { t } = useI18n()
   const [m, setM] = useState<Mistake>(initial)
   const [tagText, setTagText] = useState(initial.tags.join(', '))
   const [ocrStatus, setOcrStatus] = useState('')
@@ -58,10 +61,26 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
   const hasText = !!(m.passage.trim() || m.question.trim())
   const canSave = hasText && !!m.correct.trim() && !ocrBusy
 
+  function showOcr(status: OcrStatus) {
+    if (status.startsWith('choice:')) {
+      setOcrStatus(t.ocr.choice(status.slice('choice:'.length)))
+      return
+    }
+    const label: Record<Exclude<OcrStatus, `choice:${string}`>, string> = {
+      engine: t.ocr.engine,
+      layout: t.ocr.layout,
+      passage: t.ocr.passage,
+      question: t.ocr.question,
+      right: t.ocr.right,
+      done: t.ocr.done,
+    }
+    setOcrStatus(label[status as Exclude<OcrStatus, `choice:${string}`>])
+  }
+
   async function runOcr(src: string) {
     setOcrBusy(true)
     try {
-      const r = await ocrScreenshot(src, setOcrStatus)
+      const r = await ocrScreenshot(src, showOcr)
       setM((p) => ({
         ...p,
         passage: r.passage || p.passage,
@@ -71,12 +90,12 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
         myAnswer: p.myAnswer || r.selected,
         figures: p.figures.length ? p.figures : r.figures,
       }))
-      const notes = [r.choices ? '识别完成，请核对文字（特别是画线部分和数字）' : '识别完成，但没找到 A–D 选项框，请手动补全选项']
-      if (r.figures.length) notes.push('已自动裁出图表，不满意可以删掉后点「框选图表」')
-      setOcrStatus(notes.join('；'))
+      const notes = [r.choices ? t.editor.ocrOk : t.editor.ocrNoChoices]
+      if (r.figures.length) notes.push(t.editor.ocrFigures)
+      setOcrStatus(notes.join(t.editor.listSep))
     } catch (e) {
       console.error(e)
-      setOcrStatus(`识别失败：${(e as Error).message}`)
+      setOcrStatus(t.editor.ocrFailed((e as Error).message))
     } finally {
       setOcrBusy(false)
     }
@@ -93,7 +112,7 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
     if (!canSave) return
     const tags = tagText
       .split(/[,，]/)
-      .map((t) => t.trim())
+      .map((tag) => tag.trim())
       .filter(Boolean)
     await saveMistake({ ...m, tags, updatedAt: Date.now() })
     localStorage.setItem(LAST_SOURCE_KEY, stripQ(m.source))
@@ -111,15 +130,15 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal wide">
         <div className="modal-head">
-          <h2>{isNew ? '录入错题' : '编辑错题'}</h2>
+          <h2>{isNew ? t.editor.addTitle : t.editor.editTitle}</h2>
           <button className="btn ghost" onClick={onClose}>
-            关闭
+            {t.editor.close}
           </button>
         </div>
 
         <div className="field">
           <div className="field-label">
-            1. 粘贴截图 <span className="hint">会自动识别成文字题目（左栏 → 文章，右栏 → 问题和选项，蓝框 → 你当时的答案）</span>
+            {t.editor.paste} <span className="hint">{t.editor.pasteHint}</span>
           </div>
           <ImageDropZone
             images={m.images}
@@ -130,10 +149,10 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
             renderActions={(src) => (
               <>
                 <button type="button" className="btn tiny" disabled={ocrBusy} onClick={() => runOcr(src)}>
-                  识别文字
+                  {t.editor.recognize}
                 </button>
                 <button type="button" className="btn tiny" onClick={() => setCropping(src)}>
-                  框选图表
+                  {t.editor.crop}
                 </button>
               </>
             )}
@@ -141,10 +160,10 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
           {ocrStatus && <div className={`ocr-status ${ocrBusy ? 'busy' : ''}`}>{ocrStatus}</div>}
           {m.figures.length > 0 && (
             <div className="figures-row">
-              <span className="field-label">练习时显示的图表：</span>
+              <span className="field-label">{t.editor.figures}</span>
               {m.figures.map((f, i) => (
                 <div key={i} className="thumb">
-                  <img src={f} alt={`图表 ${i + 1}`} />
+                  <img src={f} alt={t.common.figureAlt(i + 1)} />
                   <button type="button" className="thumb-remove" onClick={() => set('figures', m.figures.filter((_, j) => j !== i))}>
                     ×
                   </button>
@@ -156,29 +175,29 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
 
         <div className="form-grid">
           <label>
-            模块
+            {t.editor.module}
             <div className="seg">
               {(['RW', 'Math'] as Section[]).map((s) => (
                 <button key={s} type="button" className={m.section === s ? 'on' : ''} onClick={() => setM((p) => ({ ...p, section: s, questionType: '' }))}>
-                  {s === 'RW' ? '阅读文法' : '数学'}
+                  {s === 'RW' ? t.common.sectionRW : t.common.sectionMath}
                 </button>
               ))}
             </div>
           </label>
           <label>
-            题型
+            {t.editor.type}
             <select value={m.questionType} onChange={(e) => set('questionType', e.target.value)}>
-              <option value="">未分类</option>
-              {QUESTION_TYPES[m.section].map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
+              <option value="">{t.editor.uncategorized}</option>
+              {QUESTION_TYPES[m.section].map((id) => (
+                <option key={id} value={id}>
+                  {qtypeLabel(t, id)}
                 </option>
               ))}
             </select>
           </label>
           <label className="span2">
-            来源（卷子 · 模块 · 题号）
-            <input list="sources" value={m.source} placeholder="例：2026年10月北美A卷 · RW Module 2 · Q16" onChange={(e) => set('source', e.target.value)} />
+            {t.editor.source}
+            <input list="sources" value={m.source} placeholder={t.editor.sourcePlaceholder} onChange={(e) => set('source', e.target.value)} />
             <datalist id="sources">
               {sources.map((s) => (
                 <option key={s} value={s} />
@@ -189,29 +208,29 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
 
         <div className="field">
           <div className="field-label">
-            2. 文章 / 材料
-            <button type="button" className="btn tiny" onClick={wrapUnderline} title="先在下面选中文字，再点这里">
-              <u>U</u> 选中文字加下划线
+            {t.editor.passage}
+            <button type="button" className="btn tiny" onClick={wrapUnderline} title={t.editor.underlineTitle}>
+              <u>U</u> {t.editor.underline}
             </button>
-            <span className="hint">{'{{…}}'} = 画线部分，______ = 空格，“• ” 开头 = 笔记要点</span>
+            <span className="hint">{t.editor.markupHint}</span>
           </div>
-          <textarea ref={passageRef} rows={7} value={m.passage} onChange={(e) => set('passage', e.target.value)} placeholder="识别结果会出现在这里，也可以直接粘贴原文" />
+          <textarea ref={passageRef} rows={7} value={m.passage} onChange={(e) => set('passage', e.target.value)} placeholder={t.editor.passagePlaceholder} />
           {m.passage.includes('{{') && <RichText className="passage-preview" text={m.passage} />}
         </div>
         <label className="field">
-          问题
+          {t.editor.question}
           <textarea rows={2} value={m.question} onChange={(e) => set('question', e.target.value)} placeholder="Which choice completes the text with the most logical and precise word or phrase?" />
         </label>
 
         <div className="field">
           <div className="field-label">
-            选项
+            {t.editor.choices}
             <div className="seg inline">
               <button type="button" className={m.format === 'mc' ? 'on' : ''} onClick={() => set('format', 'mc')}>
-                选择题
+                {t.editor.mc}
               </button>
               <button type="button" className={m.format === 'spr' ? 'on' : ''} onClick={() => set('format', 'spr')}>
-                填空题
+                {t.editor.spr}
               </button>
             </div>
           </div>
@@ -220,7 +239,7 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
               {LETTERS.map((l) => (
                 <div key={l} className="choice-input">
                   <span className={`letter-pill ${m.correct === l ? 'correct' : ''} ${m.myAnswer === l && m.correct !== l ? 'wrong' : ''}`}>{l}</span>
-                  <textarea rows={2} value={m.choices[l]} onChange={(e) => setChoice(l, e.target.value)} placeholder={`选项 ${l}`} />
+                  <textarea rows={2} value={m.choices[l]} onChange={(e) => setChoice(l, e.target.value)} placeholder={t.editor.choicePlaceholder(l)} />
                 </div>
               ))}
             </div>
@@ -229,41 +248,41 @@ export function MistakeEditor({ initial, isNew, onClose }: Props) {
 
         <div className="form-grid">
           <div className="field">
-            <div className="field-label">3. 正确答案 *</div>
+            <div className="field-label">{t.editor.correct}</div>
             {m.format === 'mc' ? (
               <LetterPicker value={m.correct} onChange={(v) => set('correct', v)} tone="correct" />
             ) : (
-              <input value={m.correct} onChange={(e) => set('correct', e.target.value)} placeholder="如 4.57 或 3/4" />
+              <input value={m.correct} onChange={(e) => set('correct', e.target.value)} placeholder={t.editor.correctPlaceholder} />
             )}
           </div>
           <div className="field">
-            <div className="field-label">我当时的答案</div>
+            <div className="field-label">{t.editor.mine}</div>
             {m.format === 'mc' ? (
               <LetterPicker value={m.myAnswer} onChange={(v) => set('myAnswer', v)} tone="wrong" allowEmpty />
             ) : (
-              <input value={m.myAnswer} onChange={(e) => set('myAnswer', e.target.value)} placeholder="留空 = 没作答" />
+              <input value={m.myAnswer} onChange={(e) => set('myAnswer', e.target.value)} placeholder={t.editor.minePlaceholder} />
             )}
           </div>
         </div>
 
         <label className="field">
-          解析 / 我为什么错
-          <textarea rows={4} value={m.explanation} onChange={(e) => set('explanation', e.target.value)} placeholder="定位句在哪、陷阱是什么、下次怎么避免" />
+          {t.editor.explanation}
+          <textarea rows={4} value={m.explanation} onChange={(e) => set('explanation', e.target.value)} placeholder={t.editor.explanationPlaceholder} />
         </label>
         <label className="field">
-          标签（逗号分隔）
-          <input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder="如：粗心, 时间不够, 生词" />
+          {t.editor.tags}
+          <input value={tagText} onChange={(e) => setTagText(e.target.value)} placeholder={t.editor.tagsPlaceholder} />
         </label>
 
         <div className="modal-foot">
-          {!canSave && !ocrBusy && <span className="hint">{hasText ? '还差正确答案' : '需要文字题目：贴截图自动识别，或手动粘贴原文'}</span>}
+          {!canSave && !ocrBusy && <span className="hint">{hasText ? t.editor.needCorrect : t.editor.needText}</span>}
           {isNew && (
             <button className="btn" disabled={!canSave} onClick={() => save(true)}>
-              保存并录入下一题
+              {t.editor.saveNext}
             </button>
           )}
           <button className="btn primary" disabled={!canSave} onClick={() => save(false)}>
-            保存
+            {t.editor.save}
           </button>
         </div>
       </div>

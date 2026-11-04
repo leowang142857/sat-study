@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { Mistake, Section } from '../types'
 import { LETTERS } from '../types'
-import { QUESTION_TYPES, typeLabel } from '../constants'
+import { QUESTION_TYPES } from '../constants'
+import { qtypeLabel } from '../messages'
+import { useI18n } from '../i18n'
 import { useStore } from '../store'
 import { MistakeEditor, blankMistake } from '../components/MistakeEditor'
 import { RichText } from '../components/RichText'
@@ -10,6 +12,7 @@ type Status = 'all' | 'open' | 'mastered'
 
 export function MistakesPage() {
   const { mistakes, saveMistake, deleteMistake } = useStore()
+  const { t } = useI18n()
   const [editing, setEditing] = useState<{ m: Mistake; isNew: boolean } | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -39,33 +42,31 @@ export function MistakesPage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>错题本</h1>
-          <p className="sub">
-            共 {mistakes.length} 题 · 未掌握 {mistakes.filter((m) => !m.mastered).length} 题
-          </p>
+          <h1>{t.mistakes.title}</h1>
+          <p className="sub">{t.mistakes.summary(mistakes.length, mistakes.filter((m) => !m.mastered).length)}</p>
         </div>
         <button className="btn primary" onClick={() => setEditing({ m: blankMistake(), isNew: true })}>
-          + 录入错题
+          {t.mistakes.add}
         </button>
       </div>
 
       <div className="filters">
-        <input className="search" placeholder="搜索原文、选项、解析、标签…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="search" placeholder={t.mistakes.search} value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={section} onChange={(e) => (setSection(e.target.value as Section | 'all'), setType('all'))}>
-          <option value="all">全部模块</option>
-          <option value="RW">阅读文法</option>
-          <option value="Math">数学</option>
+          <option value="all">{t.mistakes.allSections}</option>
+          <option value="RW">{t.common.sectionRW}</option>
+          <option value="Math">{t.common.sectionMath}</option>
         </select>
         <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="all">全部题型</option>
-          {typeOptions.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
+          <option value="all">{t.mistakes.allTypes}</option>
+          {typeOptions.map((id) => (
+            <option key={id} value={id}>
+              {qtypeLabel(t, id)}
             </option>
           ))}
         </select>
         <select value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="all">全部来源</option>
+          <option value="all">{t.mistakes.allSources}</option>
           {sources.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -75,9 +76,9 @@ export function MistakesPage() {
         <div className="seg">
           {(
             [
-              ['open', '未掌握'],
-              ['mastered', '已掌握'],
-              ['all', '全部'],
+              ['open', t.mistakes.statusOpen],
+              ['mastered', t.mistakes.statusMastered],
+              ['all', t.mistakes.statusAll],
             ] as [Status, string][]
           ).map(([v, label]) => (
             <button key={v} className={status === v ? 'on' : ''} onClick={() => setStatus(v)}>
@@ -88,7 +89,7 @@ export function MistakesPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="empty">{mistakes.length === 0 ? '还没有错题。点右上角「录入错题」，直接 ⌘V 粘贴截图就行。' : '没有符合筛选条件的错题。'}</div>
+        <div className="empty">{mistakes.length === 0 ? t.mistakes.emptyNone : t.mistakes.emptyFiltered}</div>
       ) : (
         <div className="mistake-list">
           {filtered.map((m) => (
@@ -98,7 +99,7 @@ export function MistakesPage() {
               open={expanded === m.id}
               onToggle={() => setExpanded(expanded === m.id ? null : m.id)}
               onEdit={() => setEditing({ m, isNew: false })}
-              onDelete={() => confirm('确定删除这道错题？') && deleteMistake(m.id)}
+              onDelete={() => confirm(t.mistakes.confirmDelete) && deleteMistake(m.id)}
               onMastered={() => saveMistake({ ...m, mastered: !m.mastered, updatedAt: Date.now() })}
             />
           ))}
@@ -115,6 +116,7 @@ function sourceRoot(s: string) {
 }
 
 function MistakeCard({ m, open, onToggle, onEdit, onDelete, onMastered }: { m: Mistake; open: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void; onMastered: () => void }) {
+  const { t } = useI18n()
   const redoCorrect = m.reviews.filter((r) => r.correct).length
   const last = m.reviews.at(-1)
   const preview = (m.passage || m.question).replace(/\{\{|\}\}/g, '')
@@ -124,28 +126,28 @@ function MistakeCard({ m, open, onToggle, onEdit, onDelete, onMastered }: { m: M
       <div className="mistake-top" onClick={onToggle}>
         <div className="mistake-main">
           <div className="meta">
-            <span className={`chip ${m.section === 'RW' ? 'rw' : 'math'}`}>{m.section === 'RW' ? '阅读文法' : '数学'}</span>
-            {m.questionType && <span className="chip">{typeLabel(m.section, m.questionType)}</span>}
-            {m.tags.map((t) => (
-              <span key={t} className="chip tag">
-                {t}
+            <span className={`chip ${m.section === 'RW' ? 'rw' : 'math'}`}>{m.section === 'RW' ? t.common.sectionRW : t.common.sectionMath}</span>
+            {m.questionType && <span className="chip">{qtypeLabel(t, m.questionType)}</span>}
+            {m.tags.map((tag) => (
+              <span key={tag} className="chip tag">
+                {tag}
               </span>
             ))}
-            {m.mastered && <span className="chip ok">已掌握</span>}
+            {m.mastered && <span className="chip ok">{t.mistakes.mastered}</span>}
           </div>
-          <div className="source">{m.source || '未填来源'}</div>
+          <div className="source">{m.source || t.common.noSource}</div>
           <div className="preview">{preview.length > 160 ? preview.slice(0, 160) + '…' : preview}</div>
         </div>
         <div className="answers">
           <div>
-            我选 <b className="wrong-text">{m.myAnswer || '—'}</b>
+            {t.mistakes.mine} <b className="wrong-text">{m.myAnswer || '—'}</b>
           </div>
           <div>
-            正确 <b className="correct-text">{m.correct}</b>
+            {t.mistakes.correct} <b className="correct-text">{m.correct}</b>
           </div>
           {m.reviews.length > 0 && (
             <div className="redo">
-              重做 {redoCorrect}/{m.reviews.length}
+              {t.mistakes.redo(redoCorrect, m.reviews.length)}
               {last && <span className={last.correct ? 'correct-text' : 'wrong-text'}> {last.correct ? '✓' : '✗'}</span>}
             </div>
           )}
@@ -155,7 +157,7 @@ function MistakeCard({ m, open, onToggle, onEdit, onDelete, onMastered }: { m: M
       {open && (
         <div className="mistake-detail">
           {m.figures.map((src, i) => (
-            <img key={i} className="detail-img" src={src} alt={`图表 ${i + 1}`} />
+            <img key={i} className="detail-img" src={src} alt={t.common.figureAlt(i + 1)} />
           ))}
           {m.passage && <RichText className="passage-text" text={m.passage} />}
           {m.question && <p className="question-text">{m.question}</p>}
@@ -171,27 +173,27 @@ function MistakeCard({ m, open, onToggle, onEdit, onDelete, onMastered }: { m: M
           )}
           {m.explanation && (
             <div className="explanation">
-              <div className="field-label">解析</div>
+              <div className="field-label">{t.mistakes.explanation}</div>
               {m.explanation}
             </div>
           )}
           {m.images.length > 0 && (
             <details className="originals">
-              <summary>原截图（{m.images.length}）</summary>
+              <summary>{t.mistakes.originals(m.images.length)}</summary>
               {m.images.map((src, i) => (
-                <img key={i} className="detail-img" src={src} alt={`截图 ${i + 1}`} />
+                <img key={i} className="detail-img" src={src} alt={t.common.screenshotAlt(i + 1)} />
               ))}
             </details>
           )}
           <div className="card-actions">
             <button className="btn small" onClick={onMastered}>
-              {m.mastered ? '移回未掌握' : '标记已掌握'}
+              {m.mastered ? t.mistakes.backToOpen : t.mistakes.markMastered}
             </button>
             <button className="btn small" onClick={onEdit}>
-              编辑
+              {t.common.edit}
             </button>
             <button className="btn small danger" onClick={onDelete}>
-              删除
+              {t.common.delete}
             </button>
           </div>
         </div>

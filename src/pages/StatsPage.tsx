@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { Section } from '../types'
 import { QUESTION_TYPES } from '../constants'
+import { qtypeLabel } from '../messages'
+import { useI18n } from '../i18n'
 import { useStore } from '../store'
 import { isDue } from '../srs'
 
@@ -8,37 +10,39 @@ const DAY = 86400000
 
 export function StatsPage() {
   const { mistakes, words } = useStore()
+  const { t } = useI18n()
   const [section, setSection] = useState<Section>('RW')
 
   const inSection = mistakes.filter((m) => m.section === section)
   const allReviews = inSection.flatMap((m) => m.reviews)
   const redoRate = allReviews.length ? Math.round((allReviews.filter((r) => r.correct).length / allReviews.length) * 100) : null
 
-  const byType = [...QUESTION_TYPES[section], { id: '', label: '未分类' }]
-    .map((t) => {
-      const ms = inSection.filter((m) => m.questionType === t.id)
+  const byType = [...QUESTION_TYPES[section], '']
+    .map((id) => {
+      const ms = inSection.filter((m) => m.questionType === id)
       const rv = ms.flatMap((m) => m.reviews)
       return {
-        ...t,
+        id,
+        label: qtypeLabel(t, id),
         total: ms.length,
         open: ms.filter((m) => !m.mastered).length,
         rate: rv.length ? Math.round((rv.filter((r) => r.correct).length / rv.length) * 100) : null,
       }
     })
-    .filter((t) => t.total > 0)
+    .filter((row) => row.total > 0)
     .sort((a, b) => b.open - a.open || (a.rate ?? -1) - (b.rate ?? -1) || b.total - a.total)
-  const maxType = Math.max(1, ...byType.map((t) => t.total))
+  const maxType = Math.max(1, ...byType.map((row) => row.total))
 
   const bySource = Object.entries(
     inSection.reduce<Record<string, number>>((acc, m) => {
-      const s = m.source.replace(/\s*·\s*Q\d+$/, '') || '未填来源'
+      const s = m.source.replace(/\s*·\s*Q\d+$/, '') || t.common.noSource
       acc[s] = (acc[s] ?? 0) + 1
       return acc
     }, {}),
   ).sort((a, b) => b[1] - a[1])
 
   const tags = Object.entries(
-    inSection.flatMap((m) => m.tags).reduce<Record<string, number>>((acc, t) => ((acc[t] = (acc[t] ?? 0) + 1), acc), {}),
+    inSection.flatMap((m) => m.tags).reduce<Record<string, number>>((acc, tag) => ((acc[tag] = (acc[tag] ?? 0) + 1), acc), {}),
   ).sort((a, b) => b[1] - a[1])
 
   const today = new Date()
@@ -58,58 +62,58 @@ export function StatsPage() {
   const mature = words.filter((w) => w.srs.interval >= 21)
   const dueToday = words.filter((w) => w.srs.reps > 0 && isDue(w.srs)).length
   const hardest = [...words].filter((w) => w.lapses > 0).sort((a, b) => b.lapses - a.lapses).slice(0, 8)
-  const weakest = byType.find((t) => t.open > 0)
+  const weakest = byType.find((row) => row.open > 0)
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>统计</h1>
-          <p className="sub">{weakest ? `目前最该练的题型：${weakest.label}（${weakest.open} 道未掌握）` : '还没有未掌握的错题'}</p>
+          <h1>{t.stats.title}</h1>
+          <p className="sub">{weakest ? t.stats.weakest(weakest.label, weakest.open) : t.stats.noneOpen}</p>
         </div>
         <div className="seg">
           {(['RW', 'Math'] as Section[]).map((s) => (
             <button key={s} className={section === s ? 'on' : ''} onClick={() => setSection(s)}>
-              {s === 'RW' ? '阅读文法' : '数学'}
+              {s === 'RW' ? t.stats.sectionRW : t.stats.sectionMath}
             </button>
           ))}
         </div>
       </div>
 
       <div className="stat-cards">
-        <Stat label="错题总数" value={inSection.length} />
-        <Stat label="未掌握" value={inSection.filter((m) => !m.mastered).length} tone="bad" />
-        <Stat label="已掌握" value={inSection.filter((m) => m.mastered).length} tone="ok" />
-        <Stat label="重做正确率" value={redoRate === null ? '—' : `${redoRate}%`} sub={`共重做 ${allReviews.length} 次`} />
+        <Stat label={t.stats.total} value={inSection.length} />
+        <Stat label={t.stats.open} value={inSection.filter((m) => !m.mastered).length} tone="bad" />
+        <Stat label={t.stats.mastered} value={inSection.filter((m) => m.mastered).length} tone="ok" />
+        <Stat label={t.stats.redoRate} value={redoRate === null ? '—' : `${redoRate}%`} sub={t.stats.redoTimes(allReviews.length)} />
       </div>
 
       <div className="stats-grid">
         <div className="card">
-          <h3>按题型</h3>
-          {byType.length === 0 && <div className="empty small">暂无数据</div>}
-          {byType.map((t) => (
-            <div key={t.id} className="bar-row">
-              <span className="bar-label">{t.label}</span>
+          <h3>{t.stats.byType}</h3>
+          {byType.length === 0 && <div className="empty small">{t.stats.noData}</div>}
+          {byType.map((row) => (
+            <div key={row.id || 'none'} className="bar-row">
+              <span className="bar-label">{row.label}</span>
               <div className="bar-track">
-                <div className="bar mastered" style={{ width: `${((t.total - t.open) / maxType) * 100}%` }} />
-                <div className="bar open" style={{ width: `${(t.open / maxType) * 100}%` }} />
+                <div className="bar mastered" style={{ width: `${((row.total - row.open) / maxType) * 100}%` }} />
+                <div className="bar open" style={{ width: `${(row.open / maxType) * 100}%` }} />
               </div>
               <span className="bar-num">
-                {t.open}/{t.total}
-                {t.rate !== null && <span className="muted"> · 重做 {t.rate}%</span>}
+                {row.open}/{row.total}
+                {row.rate !== null && <span className="muted">{t.stats.redoPct(row.rate)}</span>}
               </span>
             </div>
           ))}
           <div className="legend-row">
-            <span className="dot open" /> 未掌握 <span className="dot mastered" /> 已掌握
+            <span className="dot open" /> {t.stats.legendOpen} <span className="dot mastered" /> {t.stats.legendMastered}
           </div>
         </div>
 
         <div className="card">
-          <h3>最近 14 天</h3>
+          <h3>{t.stats.last14}</h3>
           <div className="day-chart">
             {days.map((d) => (
-              <div key={d.label} className="day-col" title={`${d.label}：录入 ${d.added}，重做 ${d.redone}`}>
+              <div key={d.label} className="day-col" title={t.stats.dayTitle(d.label, d.added, d.redone)}>
                 <div className="day-bars">
                   <div className="bar redone" style={{ height: `${(d.redone / maxDay) * 100}%` }} />
                   <div className="bar added" style={{ height: `${(d.added / maxDay) * 100}%` }} />
@@ -119,12 +123,12 @@ export function StatsPage() {
             ))}
           </div>
           <div className="legend-row">
-            <span className="dot added" /> 录入错题 <span className="dot redone" /> 重做题数
+            <span className="dot added" /> {t.stats.added} <span className="dot redone" /> {t.stats.redone}
           </div>
         </div>
 
         <div className="card">
-          <h3>按来源</h3>
+          <h3>{t.stats.bySource}</h3>
           {bySource.map(([s, n]) => (
             <div key={s} className="kv">
               <span>{s}</span>
@@ -133,11 +137,11 @@ export function StatsPage() {
           ))}
           {tags.length > 0 && (
             <>
-              <h3 className="mt">错因标签</h3>
+              <h3 className="mt">{t.stats.tags}</h3>
               <div className="chips-select">
-                {tags.map(([t, n]) => (
-                  <span key={t} className="chip tag">
-                    {t} × {n}
+                {tags.map(([tag, n]) => (
+                  <span key={tag} className="chip tag">
+                    {tag} × {n}
                   </span>
                 ))}
               </div>
@@ -146,26 +150,26 @@ export function StatsPage() {
         </div>
 
         <div className="card">
-          <h3>单词</h3>
+          <h3>{t.stats.words}</h3>
           <div className="kv">
-            <span>单词总数</span>
+            <span>{t.stats.wordTotal}</span>
             <b>{words.length}</b>
           </div>
           <div className="kv">
-            <span>学过</span>
+            <span>{t.stats.learned}</span>
             <b>{learned.length}</b>
           </div>
           <div className="kv">
-            <span>熟练（间隔 ≥ 21 天）</span>
+            <span>{t.stats.mature}</span>
             <b>{mature.length}</b>
           </div>
           <div className="kv">
-            <span>今天待复习</span>
+            <span>{t.stats.dueToday}</span>
             <b>{dueToday}</b>
           </div>
           {hardest.length > 0 && (
             <>
-              <h3 className="mt">最容易忘的词</h3>
+              <h3 className="mt">{t.stats.hardest}</h3>
               <div className="chips-select">
                 {hardest.map((w) => (
                   <span key={w.id} className="chip tag">

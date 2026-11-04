@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Letter, Mistake } from '../types'
 import { LETTERS } from '../types'
+import { LanguageToggle, useI18n } from '../i18n'
 import { RichText } from './RichText'
 
 export interface ExamAnswer {
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExit }: Props) {
+  const { t } = useI18n()
   const [answers, setAnswers] = useState<ExamAnswer[]>(() => items.map(() => ({ answer: '', marked: false, eliminated: [] })))
   const [idx, setIdx] = useState(0)
   const [reviewPage, setReviewPage] = useState(false)
@@ -30,7 +32,7 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
   const [timerHidden, setTimerHidden] = useState(false)
   const [directionsOpen, setDirectionsOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) || '学生')
+  const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) || '')
   const submitted = useRef(false)
 
   const submit = useCallback(() => {
@@ -40,8 +42,8 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
   }, [answers, onSubmit])
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed((e) => e + 1), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setElapsed((e) => e + 1), 1000)
+    return () => clearInterval(timer)
   }, [])
 
   const remaining = timeLimit === null ? null : Math.max(0, timeLimit - elapsed)
@@ -80,6 +82,7 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
   const clock = fmt(remaining ?? elapsed)
   const lowTime = remaining !== null && remaining <= 300
   const hasLeft = !!(m.passage.trim() || m.figures.length)
+  const shownName = name || t.exam.defaultName
 
   return (
     <div className="exam">
@@ -87,7 +90,7 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
         <div className="exam-title">
           <div className="exam-section">{title}</div>
           <button className="link-btn" onClick={() => setDirectionsOpen((v) => !v)}>
-            Directions {directionsOpen ? '▴' : '▾'}
+            {t.exam.directions} {directionsOpen ? '▴' : '▾'}
           </button>
         </div>
         <div className="exam-timer">
@@ -95,15 +98,16 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
             <>
               <div className={`clock ${lowTime ? 'low' : ''}`}>{timerHidden ? <span className="clock-hidden">⏱</span> : clock}</div>
               <button className="pill-btn" onClick={() => setTimerHidden((v) => !v)}>
-                {timerHidden ? 'Show' : 'Hide'}
+                {timerHidden ? t.exam.show : t.exam.hide}
               </button>
             </>
           )}
         </div>
         <div className="exam-tools">
+          <LanguageToggle />
           <button className="tool-btn" onClick={onExit}>
             <span className="tool-icon">⎋</span>
-            退出
+            {t.exam.exit}
           </button>
         </div>
       </header>
@@ -111,10 +115,10 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
 
       {directionsOpen && (
         <div className="directions">
-          The questions in this section address a number of important reading and writing skills. Each question includes one or more passages, which may include a table or graph. Read each passage and question carefully, and then choose the best answer to the question based on the passage(s).
+          {t.exam.directionsBody}
           <div className="directions-close">
             <button className="pill-btn" onClick={() => setDirectionsOpen(false)}>
-              Close
+              {t.exam.close}
             </button>
           </div>
         </div>
@@ -122,15 +126,15 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
 
       {reviewPage ? (
         <div className="exam-review">
-          <h2>Check Your Work</h2>
-          <p>On test day, you won't be able to move on to the next module until time expires. For these practice questions, you can click Submit when you're ready.</p>
+          <h2>{t.exam.checkWork}</h2>
+          <p>{t.exam.checkBody}</p>
           <div className="review-card">
             <div className="review-card-head">
               <b>{title}</b>
               <span className="legend">
-                <span className="lg current">⌖ Current</span>
-                <span className="lg unanswered">Unanswered</span>
-                <span className="lg marked">🔖 For Review</span>
+                <span className="lg current">{t.exam.current}</span>
+                <span className="lg unanswered">{t.exam.unanswered}</span>
+                <span className="lg marked">{t.exam.forReview}</span>
               </span>
             </div>
             <QuestionGrid
@@ -143,7 +147,7 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
             />
           </div>
           <button className="btn primary submit-btn" onClick={submit}>
-            Submit
+            {t.exam.submit}
           </button>
         </div>
       ) : (
@@ -151,7 +155,7 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
           {hasLeft && (
             <section className="exam-left">
               {m.figures.map((src, i) => (
-                <img key={i} className="exam-figure" src={src} alt={`Figure ${i + 1}`} />
+                <img key={i} className="exam-figure" src={src} alt={t.common.figureAlt(i + 1)} />
               ))}
               {m.passage && <RichText className="exam-passage" text={m.passage} />}
             </section>
@@ -161,10 +165,10 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
             <div className="q-bar">
               <span className="q-num">{idx + 1}</span>
               <button className={`mark-btn ${a.marked ? 'on' : ''}`} onClick={() => update({ marked: !a.marked })}>
-                <span className="bookmark">{a.marked ? '🔖' : '🏷'}</span> Mark for Review
+                <span className="bookmark">{a.marked ? '🔖' : '🏷'}</span> {t.exam.mark}
               </button>
               {m.format === 'mc' && (
-                <button className={`abc-btn ${eliminator ? 'on' : ''}`} onClick={() => setEliminator((v) => !v)} title="Option eliminator">
+                <button className={`abc-btn ${eliminator ? 'on' : ''}`} onClick={() => setEliminator((v) => !v)} title={t.exam.eliminator}>
                   <s>ABC</s>
                 </button>
               )}
@@ -180,15 +184,15 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
                     <div key={l} className="choice-row">
                       <button className={`choice ${selected ? 'selected' : ''} ${crossed ? 'crossed' : ''}`} onClick={() => choose(l)}>
                         <span className="choice-letter">{l}</span>
-                        <span className="choice-text">{m.choices[l] || <i className="muted">（没有录入选项文字）</i>}</span>
+                        <span className="choice-text">{m.choices[l] || <i className="muted">{t.exam.noChoice}</i>}</span>
                       </button>
                       {eliminator &&
                         (crossed ? (
                           <button className="undo-btn" onClick={() => toggleEliminate(l)}>
-                            Undo
+                            {t.exam.undo}
                           </button>
                         ) : (
-                          <button className="strike-btn" onClick={() => toggleEliminate(l)} title={`Cross out ${l}`}>
+                          <button className="strike-btn" onClick={() => toggleEliminate(l)} title={t.exam.crossOut(l)}>
                             <s>{l}</s>
                           </button>
                         ))}
@@ -199,7 +203,9 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
             ) : (
               <div className="spr">
                 <input value={a.answer} onChange={(e) => update({ answer: e.target.value.slice(0, 6) })} placeholder="" />
-                <div className="spr-preview">Answer Preview: {a.answer}</div>
+                <div className="spr-preview">
+                  {t.exam.preview} {a.answer}
+                </div>
               </div>
             )}
           </section>
@@ -210,20 +216,20 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
         <button
           className="student-name"
           onClick={() => {
-            const n = prompt('显示的名字', name)?.trim()
+            const n = prompt(t.exam.namePrompt, shownName)?.trim()
             if (n) {
               setName(n)
               localStorage.setItem(NAME_KEY, n)
             }
           }}
         >
-          {name}
+          {shownName}
         </button>
         {reviewPage && <div />}
         {!reviewPage && (
           <div className="nav-center">
             <button className="nav-toggle" onClick={() => setNavOpen((v) => !v)}>
-              Question {idx + 1} of {items.length} {navOpen ? '▴' : '▾'}
+              {t.exam.questionOf(idx + 1, items.length)} {navOpen ? '▴' : '▾'}
             </button>
             {navOpen && (
               <div className="nav-pop">
@@ -234,9 +240,9 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
                   </button>
                 </div>
                 <div className="legend">
-                  <span className="lg current">⌖ Current</span>
-                  <span className="lg unanswered">Unanswered</span>
-                  <span className="lg marked">🔖 For Review</span>
+                  <span className="lg current">{t.exam.current}</span>
+                  <span className="lg unanswered">{t.exam.unanswered}</span>
+                  <span className="lg marked">{t.exam.forReview}</span>
                 </div>
                 <QuestionGrid
                   answers={answers}
@@ -253,7 +259,7 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
                     setReviewPage(true)
                   }}
                 >
-                  Go to Review Page
+                  {t.exam.goReview}
                 </button>
               </div>
             )}
@@ -262,12 +268,12 @@ export function ExamRunner({ title, items, timeLimit, showTimer, onSubmit, onExi
         <div className="nav-right">
           {(idx > 0 || reviewPage) && (
             <button className="pill-btn primary" onClick={goBack}>
-              Back
+              {t.exam.back}
             </button>
           )}
           {!reviewPage && (
             <button className="pill-btn primary" onClick={goNext}>
-              Next
+              {t.exam.next}
             </button>
           )}
         </div>

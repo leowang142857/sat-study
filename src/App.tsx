@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { I18nProvider, LanguageToggle, useI18n } from './i18n'
 import { StoreProvider, useStore } from './store'
 import { MistakesPage } from './pages/MistakesPage'
 import { PracticePage } from './pages/PracticePage'
@@ -7,22 +8,17 @@ import { FlashcardsPage } from './pages/FlashcardsPage'
 import { StatsPage } from './pages/StatsPage'
 import { isDue } from './srs'
 
-const PAGES = [
-  { id: 'mistakes', label: '错题本' },
-  { id: 'practice', label: '重做练习' },
-  { id: 'vocab', label: '单词本' },
-  { id: 'cards', label: '闪卡复习' },
-  { id: 'stats', label: '统计' },
-] as const
-type PageId = (typeof PAGES)[number]['id']
+const PAGE_IDS = ['mistakes', 'practice', 'vocab', 'cards', 'stats'] as const
+type PageId = (typeof PAGE_IDS)[number]
 
 function readHash(): PageId {
   const h = location.hash.slice(1)
-  return (PAGES.find((p) => p.id === h)?.id ?? 'mistakes') as PageId
+  return (PAGE_IDS.find((id) => id === h) ?? 'mistakes') as PageId
 }
 
 function Shell() {
   const { ready, words, exportBackup, importBackup } = useStore()
+  const { t } = useI18n()
   const [page, setPage] = useState<PageId>(readHash)
   const [inExam, setInExam] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -34,8 +30,15 @@ function Shell() {
   }, [])
 
   const dueCount = words.filter((w) => isDue(w.srs)).length
+  const labels: Record<PageId, string> = {
+    mistakes: t.nav.mistakes,
+    practice: t.nav.practice,
+    vocab: t.nav.vocab,
+    cards: t.nav.cards,
+    stats: t.nav.stats,
+  }
 
-  if (!ready) return <div className="loading">加载中…</div>
+  if (!ready) return <div className="loading">{t.loading}</div>
 
   return (
     <div className="app">
@@ -43,19 +46,20 @@ function Shell() {
         <header className="topnav">
           <div className="brand">SAT Study</div>
           <nav>
-            {PAGES.map((p) => (
-              <a key={p.id} href={`#${p.id}`} className={page === p.id ? 'active' : ''}>
-                {p.label}
-                {p.id === 'cards' && dueCount > 0 && <span className="badge">{dueCount}</span>}
+            {PAGE_IDS.map((id) => (
+              <a key={id} href={`#${id}`} className={page === id ? 'active' : ''}>
+                {labels[id]}
+                {id === 'cards' && dueCount > 0 && <span className="badge">{dueCount}</span>}
               </a>
             ))}
           </nav>
           <div className="nav-actions">
-            <button className="btn ghost small" onClick={exportBackup} title="把所有错题和单词下载成一个 JSON 文件">
-              导出备份
+            <LanguageToggle />
+            <button className="btn ghost small" onClick={exportBackup} title={t.backup.exportTitle}>
+              {t.backup.export}
             </button>
             <button className="btn ghost small" onClick={() => fileRef.current?.click()}>
-              导入备份
+              {t.backup.import}
             </button>
             <input
               ref={fileRef}
@@ -68,9 +72,11 @@ function Shell() {
                 if (!f) return
                 try {
                   const r = await importBackup(f)
-                  alert(`导入完成：${r.mistakes} 道错题，${r.words} 个单词`)
+                  alert(t.backup.done(r.mistakes, r.words))
                 } catch (err) {
-                  alert(`导入失败：${(err as Error).message}`)
+                  const message = (err as Error).message
+                  const detail = message === 'not-backup' ? t.backup.notBackup : err instanceof SyntaxError ? t.backup.badJson : message
+                  alert(t.backup.failed(detail))
                 }
               }}
             />
@@ -90,8 +96,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <StoreProvider>
-      <Shell />
-    </StoreProvider>
+    <I18nProvider>
+      <StoreProvider>
+        <Shell />
+      </StoreProvider>
+    </I18nProvider>
   )
 }

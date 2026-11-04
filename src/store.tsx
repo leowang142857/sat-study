@@ -110,7 +110,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const importBackup = useCallback(
     async (file: File) => {
       const data = JSON.parse(await file.text()) as Partial<Backup>
-      if (data.app !== 'sat-study') throw new Error('这不是 sat-study 的备份文件')
+      if (data.app !== 'sat-study') throw new Error('not-backup')
       const ms = (data.mistakes ?? []).map((m) => ({ ...m, figures: m.figures ?? [] }))
       const ws = data.words ?? []
       await Promise.all([saveMistakes(ms), saveWords(ws)])

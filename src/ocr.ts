@@ -12,7 +12,8 @@ export interface OcrResult {
   figures: string[]
 }
 
-export type OcrProgress = (msg: string) => void
+export type OcrStatus = 'engine' | 'layout' | 'passage' | 'question' | 'right' | 'done' | `choice:${Letter}`
+export type OcrProgress = (status: OcrStatus) => void
 
 const BASE = import.meta.env.BASE_URL
 let workerPromise: Promise<Worker> | null = null
@@ -403,12 +404,12 @@ function splitChoicesFromText(text: string): { question: string; choices: Record
 /* ---------- main ---------- */
 
 export async function ocrScreenshot(dataUrl: string, progress: OcrProgress = () => {}): Promise<OcrResult> {
-  progress('加载识别引擎…')
+  progress('engine')
   const worker = await getWorker()
   const full = await loadScaled(dataUrl)
   const g = grayOf(full)
 
-  progress('分析版面…')
+  progress('layout')
   const divider = findDivider(g)
   const left = divider ? crop(full, 0, 0, divider[0] - 4, full.height) : null
   const right = divider ? crop(full, divider[1] + 4, 0, full.width - divider[1] - 4, full.height) : full
@@ -416,7 +417,7 @@ export async function ocrScreenshot(dataUrl: string, progress: OcrProgress = () 
   let passage = ''
   const figures: string[] = []
   if (left) {
-    progress('识别左栏文章…')
+    progress('passage')
     await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO })
     const { data } = await worker.recognize(left, {}, { blocks: true, text: true })
     const split = splitProseAndFigure(pageToParagraphs(data, grayOf(left)), left)
@@ -427,7 +428,7 @@ export async function ocrScreenshot(dataUrl: string, progress: OcrProgress = () 
   const rg = grayOf(right)
   const boxes = findChoiceBoxes(rg)
   if (boxes) {
-    progress('识别问题…')
+    progress('question')
     await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO })
     const qCanvas = crop(right, 0, 0, right.width, Math.max(1, boxes[0].top - 4))
     const { data: qd } = await worker.recognize(qCanvas, {}, { blocks: true, text: true })
@@ -437,7 +438,7 @@ export async function ocrScreenshot(dataUrl: string, progress: OcrProgress = () 
     await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK })
     for (let i = 0; i < 4; i++) {
       const b = boxes[i]
-      progress(`识别选项 ${LETTERS[i]}…`)
+      progress(`choice:${LETTERS[i]}`)
       const start = textStartInBox(rg, b)
       const x = start ?? b.left + 4
       const c = crop(right, x, b.top + 4, b.right - 4 - x, b.bottom - b.top - 8)
@@ -447,15 +448,15 @@ export async function ocrScreenshot(dataUrl: string, progress: OcrProgress = () 
       choices[LETTERS[i]] = t
     }
     const sel = boxes.findIndex((b) => b.blue)
-    progress('完成')
+    progress('done')
     return { passage, question, choices, selected: sel >= 0 ? LETTERS[sel] : '', figures }
   }
 
-  progress('识别右栏…')
+  progress('right')
   await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO })
   const { data } = await worker.recognize(right, {}, { blocks: true, text: true })
   const rightText = divider ? data.text : pageToText(data, rg)
   const { question, choices } = splitChoicesFromText(rightText)
-  progress('完成')
+  progress('done')
   return { passage, question: question || (divider ? '' : cleanQuestion(rightText)), choices, selected: '', figures }
 }

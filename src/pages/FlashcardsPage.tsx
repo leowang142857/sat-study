@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Rating, Word } from '../types'
 import { isDue, previewInterval } from '../srs'
+import { useI18n } from '../i18n'
+import type { Messages } from '../messages'
+import type { SrsState } from '../types'
 import { useStore } from '../store'
 
 const NEW_PER_DAY_KEY = 'sat-study:new-per-day'
-const RATINGS: { r: Rating; label: string; key: string }[] = [
-  { r: 'again', label: '忘了', key: '1' },
-  { r: 'hard', label: '模糊', key: '2' },
-  { r: 'good', label: '记得', key: '3' },
-  { r: 'easy', label: '很熟', key: '4' },
+const RATING_KEYS: { r: Rating; key: string }[] = [
+  { r: 'again', key: '1' },
+  { r: 'hard', key: '2' },
+  { r: 'good', key: '3' },
+  { r: 'easy', key: '4' },
 ]
 
 type Mode = 'en-zh' | 'zh-en'
 
 export function FlashcardsPage() {
   const { words, rateWord } = useStore()
+  const { t } = useI18n()
   const [newPerDay, setNewPerDay] = useState(() => Number(localStorage.getItem(NEW_PER_DAY_KEY)) || 20)
   const [mode, setMode] = useState<Mode>('en-zh')
   const [cram, setCram] = useState(false)
@@ -33,6 +37,7 @@ export function FlashcardsPage() {
   }, [words, newPerDay, cram, cramQueue])
 
   const card = queue[0]
+  const ratingLabel: Record<Rating, string> = { again: t.cards.again, hard: t.cards.hard, good: t.cards.good, easy: t.cards.easy }
 
   async function rate(r: Rating) {
     if (!card) return
@@ -52,7 +57,7 @@ export function FlashcardsPage() {
         e.preventDefault()
         setFlipped((f) => !f)
       } else if (flipped) {
-        const hit = RATINGS.find((x) => x.key === e.key)
+        const hit = RATING_KEYS.find((x) => x.key === e.key)
         if (hit) rate(hit.r)
       }
     }
@@ -64,20 +69,20 @@ export function FlashcardsPage() {
     <div className="page narrow">
       <div className="page-head">
         <div>
-          <h1>闪卡复习</h1>
-          <p className="sub">{cram ? `自由练习 · 剩 ${queue.length} 张` : `今天还剩 ${queue.length} 张 · 已复习 ${done} 张`}</p>
+          <h1>{t.cards.title}</h1>
+          <p className="sub">{cram ? t.cards.cramLeft(queue.length) : t.cards.today(queue.length, done)}</p>
         </div>
         <div className="row-gap">
           <div className="seg">
             <button className={mode === 'en-zh' ? 'on' : ''} onClick={() => setMode('en-zh')}>
-              英 → 中
+              {t.cards.enZh}
             </button>
             <button className={mode === 'zh-en' ? 'on' : ''} onClick={() => setMode('zh-en')}>
-              中 → 英
+              {t.cards.zhEn}
             </button>
           </div>
           <label className="check">
-            每天新词
+            {t.cards.newPerDay}
             <input
               type="number"
               className="num"
@@ -101,7 +106,7 @@ export function FlashcardsPage() {
                 {card.word} {card.partOfSpeech && <span className="pos">{card.partOfSpeech}</span>}
               </div>
             ) : (
-              <div className="fc-prompt">{card.chinese || card.definition || '（没有中文释义，翻面看答案）'}</div>
+              <div className="fc-prompt">{card.chinese || card.definition || t.cards.noChinese}</div>
             )}
             {mode === 'zh-en' && !flipped && card.example && <div className="fc-example muted">{blankOut(card.example, card.word)}</div>}
             {flipped ? (
@@ -112,15 +117,15 @@ export function FlashcardsPage() {
                 {card.notes && <div className="fc-notes">{card.notes}</div>}
               </div>
             ) : (
-              <div className="fc-hint">点击或按空格翻面</div>
+              <div className="fc-hint">{t.cards.flip}</div>
             )}
           </div>
           {flipped && (
             <div className="rating-row">
-              {RATINGS.map(({ r, label, key }) => (
+              {RATING_KEYS.map(({ r, key }) => (
                 <button key={r} className={`rate-btn ${r}`} onClick={() => rate(r)}>
-                  <b>{label}</b>
-                  <span>{cram ? key : previewInterval(card.srs, r)}</span>
+                  <b>{ratingLabel[r]}</b>
+                  <span>{cram ? key : intervalText(card.srs, r, t)}</span>
                 </button>
               ))}
             </div>
@@ -128,8 +133,8 @@ export function FlashcardsPage() {
         </>
       ) : (
         <div className="card done-card">
-          <h2>🎉 {cram ? '这一轮练完了' : '今天的单词复习完了'}</h2>
-          <p className="sub">{words.length === 0 ? '先去单词本加几个单词吧。' : '不想停的话，可以自由练习全部单词（不影响复习计划）。'}</p>
+          <h2>🎉 {cram ? t.cards.cramDone : t.cards.todayDone}</h2>
+          <p className="sub">{words.length === 0 ? t.cards.empty : t.cards.keepGoing}</p>
           {words.length > 0 && (
             <button
               className="btn primary"
@@ -138,19 +143,24 @@ export function FlashcardsPage() {
                 setCramQueue([...words].sort(() => Math.random() - 0.5).map((w) => w.id))
               }}
             >
-              自由练习全部 {words.length} 个
+              {t.cards.cramAll(words.length)}
             </button>
           )}
         </div>
       )}
       {cram && (
         <button className="btn ghost" onClick={() => setCram(false)}>
-          ← 回到今日复习
+          {t.cards.back}
         </button>
       )}
-      <p className="hint center">快捷键：空格翻面，1 忘了 · 2 模糊 · 3 记得 · 4 很熟</p>
+      <p className="hint center">{t.cards.shortcuts}</p>
     </div>
   )
+}
+
+function intervalText(s: SrsState, rating: Rating, t: Messages) {
+  const iv = previewInterval(s, rating)
+  return iv.unit === 'min' ? t.common.minutes(iv.n) : t.common.days(iv.n)
 }
 
 function blankOut(sentence: string, word: string) {

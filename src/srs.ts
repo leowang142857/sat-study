@@ -22,10 +22,11 @@ export function review(s: SrsState, rating: Rating, now = Date.now()): SrsState 
   return { interval, ease, reps: reps + 1, due: startOfDay(now) + interval * DAY }
 }
 
-export function previewInterval(s: SrsState, rating: Rating): string {
-  if (rating === 'again') return '10 分钟'
+/** How soon this rating would bring the card back. The UI localizes the unit. */
+export function previewInterval(s: SrsState, rating: Rating): { n: number; unit: 'min' | 'day' } {
+  if (rating === 'again') return { n: 10, unit: 'min' }
   const next = review(s, rating)
-  return next.interval === 1 ? '1 天' : `${next.interval} 天`
+  return { n: next.interval, unit: 'day' }
 }
 
 export function isDue(s: SrsState, now = Date.now()) {

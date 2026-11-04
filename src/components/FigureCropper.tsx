@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useI18n } from '../i18n'
 
 interface Rect {
   x: number
@@ -9,6 +10,7 @@ interface Rect {
 
 /** Drag a rectangle over a screenshot to cut out a chart/table for practice mode. */
 export function FigureCropper({ src, onDone, onCancel }: { src: string; onDone: (dataUrl: string) => void; onCancel: () => void }) {
+  const { t } = useI18n()
   const imgRef = useRef<HTMLImageElement>(null)
   const [start, setStart] = useState<{ x: number; y: number } | null>(null)
   const [rect, setRect] = useState<Rect | null>(null)
@@ -18,7 +20,7 @@ export function FigureCropper({ src, onDone, onCancel }: { src: string; onDone: 
     return { x: Math.min(Math.max(e.clientX - r.left, 0), r.width), y: Math.min(Math.max(e.clientY - r.top, 0), r.height) }
   }
 
-  function confirm() {
+  function confirmCrop() {
     const img = imgRef.current
     if (!img || !rect || rect.w < 10 || rect.h < 10) return
     const k = img.naturalWidth / img.getBoundingClientRect().width
@@ -33,8 +35,8 @@ export function FigureCropper({ src, onDone, onCancel }: { src: string; onDone: 
     <div className="modal-backdrop top" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal wide">
         <div className="modal-head">
-          <h2>框选图表</h2>
-          <span className="hint">按住鼠标拖出一个框，只框图表/表格，不要框进选项</span>
+          <h2>{t.cropper.title}</h2>
+          <span className="hint">{t.cropper.hint}</span>
         </div>
         <div
           className="cropper"
@@ -51,15 +53,15 @@ export function FigureCropper({ src, onDone, onCancel }: { src: string; onDone: 
           }}
           onPointerUp={() => setStart(null)}
         >
-          <img ref={imgRef} src={src} alt="截图" draggable={false} />
+          <img ref={imgRef} src={src} alt={t.cropper.alt} draggable={false} />
           {rect && <div className="crop-rect" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} />}
         </div>
         <div className="modal-foot">
           <button className="btn" onClick={onCancel}>
-            取消
+            {t.cropper.cancel}
           </button>
-          <button className="btn primary" disabled={!rect || rect.w < 10 || rect.h < 10} onClick={confirm}>
-            保存为图表
+          <button className="btn primary" disabled={!rect || rect.w < 10 || rect.h < 10} onClick={confirmCrop}>
+            {t.cropper.save}
           </button>
         </div>
       </div>

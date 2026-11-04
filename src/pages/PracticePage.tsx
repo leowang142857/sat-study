@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Mistake, Section } from '../types'
 import { LETTERS } from '../types'
-import { QUESTION_TYPES, typeLabel } from '../constants'
+import { QUESTION_TYPES } from '../constants'
+import { qtypeLabel } from '../messages'
+import { useI18n } from '../i18n'
 import { useStore } from '../store'
 import { ExamRunner, type ExamAnswer } from '../components/ExamRunner'
 import { RichText } from '../components/RichText'
@@ -17,6 +19,7 @@ interface Session {
 
 export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => void }) {
   const { mistakes, saveMistakes } = useStore()
+  const { t } = useI18n()
   const [section, setSection] = useState<Section>('RW')
   const [types, setTypes] = useState<string[]>([])
   const [source, setSource] = useState('all')
@@ -66,12 +69,12 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
     const limit = session.timer === 'countdown' ? session.items.length * SECONDS_PER_Q[session.section] : null
     return (
       <ExamRunner
-        title={`错题重做: ${session.section === 'RW' ? 'Reading and Writing' : 'Math'}`}
+        title={t.practice.examTitle(session.section)}
         items={session.items}
         timeLimit={limit}
         showTimer={session.timer !== 'none'}
         onSubmit={finish}
-        onExit={() => confirm('退出后本次作答不会保存，确定退出？') && setSession(null)}
+        onExit={() => confirm(t.practice.confirmExit) && setSession(null)}
       />
     )
   }
@@ -82,39 +85,39 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
     <div className="page narrow">
       <div className="page-head">
         <div>
-          <h1>重做练习</h1>
-          <p className="sub">用考试界面重做错题，交卷后自动记录对错</p>
+          <h1>{t.practice.title}</h1>
+          <p className="sub">{t.practice.subtitle}</p>
         </div>
       </div>
 
       <div className="card setup">
         <div className="setup-row">
-          <span className="setup-label">模块</span>
+          <span className="setup-label">{t.practice.module}</span>
           <div className="seg">
             {(['RW', 'Math'] as Section[]).map((s) => (
               <button key={s} className={section === s ? 'on' : ''} onClick={() => (setSection(s), setTypes([]))}>
-                {s === 'RW' ? '阅读文法' : '数学'}
+                {s === 'RW' ? t.common.sectionRW : t.common.sectionMath}
               </button>
             ))}
           </div>
         </div>
 
         <div className="setup-row top">
-          <span className="setup-label">题型</span>
+          <span className="setup-label">{t.practice.type}</span>
           <div className="chips-select">
             <button className={`chip-btn ${types.length === 0 ? 'on' : ''}`} onClick={() => setTypes([])}>
-              全部
+              {t.common.all}
             </button>
-            {QUESTION_TYPES[section].map((t) => {
-              const n = mistakes.filter((m) => m.section === section && m.questionType === t.id && practicable(m) && (!onlyOpen || !m.mastered)).length
+            {QUESTION_TYPES[section].map((id) => {
+              const n = mistakes.filter((m) => m.section === section && m.questionType === id && practicable(m) && (!onlyOpen || !m.mastered)).length
               return (
                 <button
-                  key={t.id}
-                  className={`chip-btn ${types.includes(t.id) ? 'on' : ''}`}
+                  key={id}
+                  className={`chip-btn ${types.includes(id) ? 'on' : ''}`}
                   disabled={n === 0}
-                  onClick={() => setTypes((p) => (p.includes(t.id) ? p.filter((x) => x !== t.id) : [...p, t.id]))}
+                  onClick={() => setTypes((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))}
                 >
-                  {t.label} <span className="count">{n}</span>
+                  {qtypeLabel(t, id)} <span className="count">{n}</span>
                 </button>
               )
             })}
@@ -122,9 +125,9 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
         </div>
 
         <div className="setup-row">
-          <span className="setup-label">来源</span>
+          <span className="setup-label">{t.practice.source}</span>
           <select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="all">全部</option>
+            <option value="all">{t.common.all}</option>
             {sources.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -134,26 +137,26 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
         </div>
 
         <div className="setup-row">
-          <span className="setup-label">范围</span>
+          <span className="setup-label">{t.practice.scope}</span>
           <label className="check">
-            <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> 只练未掌握的
+            <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> {t.practice.onlyOpen}
           </label>
           <label className="check">
-            <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} /> 打乱顺序
+            <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} /> {t.practice.shuffle}
           </label>
           <label className="check">
-            最多 <input type="number" min={1} max={200} value={count} onChange={(e) => setCount(Math.max(1, +e.target.value || 1))} className="num" /> 题
+            {t.practice.upTo} <input type="number" min={1} max={200} value={count} onChange={(e) => setCount(Math.max(1, +e.target.value || 1))} className="num" /> {t.practice.questions}
           </label>
         </div>
 
         <div className="setup-row">
-          <span className="setup-label">计时</span>
+          <span className="setup-label">{t.practice.timing}</span>
           <div className="seg">
             {(
               [
-                ['countdown', `倒计时（每题 ${SECONDS_PER_Q[section]} 秒，同真考）`],
-                ['countup', '正计时'],
-                ['none', '不计时'],
+                ['countdown', t.practice.countdown(SECONDS_PER_Q[section])],
+                ['countup', t.practice.countUp],
+                ['none', t.practice.noTimer],
               ] as [TimerMode, string][]
             ).map(([v, label]) => (
               <button key={v} className={timer === v ? 'on' : ''} onClick={() => setTimer(v)}>
@@ -165,11 +168,11 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
 
         <div className="setup-foot">
           <span>
-            符合条件 <b>{pool.length}</b> 题，本次练 <b>{Math.min(pool.length, count)}</b> 题
-            {imageOnly > 0 && <span className="hint"> · 有 {imageOnly} 道错题还没有文字，先去错题本点「识别文字」</span>}
+            {t.practice.pool(pool.length, Math.min(pool.length, count))}
+            {imageOnly > 0 && <span className="hint">{t.practice.imageOnly(imageOnly)}</span>}
           </span>
           <button className="btn primary" disabled={pool.length === 0} onClick={start}>
-            开始练习
+            {t.practice.start}
           </button>
         </div>
       </div>
@@ -197,6 +200,7 @@ function isCorrect(m: Mistake, answer: string): boolean {
 }
 
 function ResultView({ result, onAgain, onSave }: { result: { items: Mistake[]; answers: ExamAnswer[] }; onAgain: () => void; onSave: (ms: Mistake[]) => Promise<void> }) {
+  const { t } = useI18n()
   const [items, setItems] = useState(result.items)
   const [open, setOpen] = useState<number | null>(null)
   const right = items.filter((m) => m.reviews.at(-1)?.correct).length
@@ -217,17 +221,15 @@ function ResultView({ result, onAgain, onSave }: { result: { items: Mistake[]; a
     <div className="page narrow">
       <div className="page-head">
         <div>
-          <h1>
-            本次得分 {right} / {items.length}
-          </h1>
-          <p className="sub">正确率 {items.length ? Math.round((right / items.length) * 100) : 0}% · 结果已记录到每道错题</p>
+          <h1>{t.practice.score(right, items.length)}</h1>
+          <p className="sub">{t.practice.accuracy(items.length ? Math.round((right / items.length) * 100) : 0)}</p>
         </div>
         <div className="row-gap">
           <button className="btn" onClick={masterAllCorrect}>
-            做对的全部标记已掌握
+            {t.practice.markAllCorrect}
           </button>
           <button className="btn primary" onClick={onAgain}>
-            再练一组
+            {t.practice.again}
           </button>
         </div>
       </div>
@@ -241,10 +243,11 @@ function ResultView({ result, onAgain, onSave }: { result: { items: Mistake[]; a
                 <span className="qnum">{i + 1}</span>
                 <span className={last.correct ? 'correct-text' : 'wrong-text'}>{last.correct ? '✓' : '✗'}</span>
                 <span className="result-src">
-                  {m.source} · {typeLabel(m.section, m.questionType)}
+                  {m.source} · {qtypeLabel(t, m.questionType)}
                 </span>
                 <span>
-                  你的答案 <b className={last.correct ? 'correct-text' : 'wrong-text'}>{last.answer || '未作答'}</b> · 正确 <b className="correct-text">{m.correct}</b>
+                  {t.practice.yourAnswer} <b className={last.correct ? 'correct-text' : 'wrong-text'}>{last.answer || t.practice.unanswered}</b> · {t.practice.correct}{' '}
+                  <b className="correct-text">{m.correct}</b>
                 </span>
                 <button
                   className="btn small"
@@ -253,7 +256,7 @@ function ResultView({ result, onAgain, onSave }: { result: { items: Mistake[]; a
                     toggleMastered(i)
                   }}
                 >
-                  {m.mastered ? '已掌握 ✓' : '标记已掌握'}
+                  {m.mastered ? t.practice.masteredCheck : t.practice.markMastered}
                 </button>
               </div>
               {open === i && (
@@ -275,7 +278,7 @@ function ResultView({ result, onAgain, onSave }: { result: { items: Mistake[]; a
                   )}
                   {m.explanation && (
                     <div className="explanation">
-                      <div className="field-label">解析</div>
+                      <div className="field-label">{t.practice.explanation}</div>
                       {m.explanation}
                     </div>
                   )}

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { Word } from '../types'
 import { uid } from '../db'
 import { newSrs, isDue } from '../srs'
+import { useI18n } from '../i18n'
+import type { Messages } from '../messages'
 import { useStore } from '../store'
 
 type Filter = 'all' | 'due' | 'new' | 'hard'
@@ -11,6 +13,7 @@ const emptyDraft = (): Draft => ({ word: '', partOfSpeech: '', definition: '', c
 
 export function VocabPage() {
   const { words, saveWord, saveWords, deleteWord } = useStore()
+  const { t } = useI18n()
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [lookup, setLookup] = useState('')
@@ -25,10 +28,10 @@ export function VocabPage() {
   async function lookUp() {
     const w = draft.word.trim()
     if (!w) return
-    setLookup('查询中…')
+    setLookup(t.vocab.looking)
     try {
       const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`)
-      if (!res.ok) throw new Error('词典里没找到')
+      if (!res.ok) throw new Error(t.vocab.notFound)
       const data = (await res.json()) as { meanings: { partOfSpeech: string; definitions: { definition: string; example?: string }[] }[] }[]
       const meaning = data[0]?.meanings[0]
       const def = meaning?.definitions[0]
@@ -41,7 +44,7 @@ export function VocabPage() {
       }))
       setLookup('')
     } catch (e) {
-      setLookup(`查不到：${(e as Error).message}（可能没联网）`)
+      setLookup(t.vocab.lookupFail((e as Error).message))
     }
   }
 
@@ -83,7 +86,7 @@ export function VocabPage() {
       })
     }
     await saveWords(parsed)
-    alert(`导入了 ${parsed.length} 个新单词（重复的已跳过）`)
+    alert(t.vocab.imported(parsed.length))
     setBulk('')
     setBulkOpen(false)
   }
@@ -100,28 +103,24 @@ export function VocabPage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>单词本</h1>
-          <p className="sub">
-            共 {words.length} 个 · 新词 {words.filter((w) => w.srs.reps === 0).length} · 今天待复习 {words.filter((w) => isDue(w.srs) && w.srs.reps > 0).length}
-          </p>
+          <h1>{t.vocab.title}</h1>
+          <p className="sub">{t.vocab.summary(words.length, words.filter((w) => w.srs.reps === 0).length, words.filter((w) => isDue(w.srs) && w.srs.reps > 0).length)}</p>
         </div>
         <button className="btn" onClick={() => setBulkOpen((v) => !v)}>
-          批量导入
+          {t.vocab.bulk}
         </button>
       </div>
 
       {bulkOpen && (
         <div className="card">
-          <div className="field-label">
-            每行一个：<code>单词 | 中文 | 英文释义 | 例句</code>（也可以直接从 Excel 复制，用 Tab 分隔）。只写单词也行。
-          </div>
+          <div className="field-label">{t.vocab.bulkHint}</div>
           <textarea rows={8} value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder={'ubiquitous | 无处不在的 | present everywhere\nmitigate | 减轻'} />
           <div className="modal-foot">
             <button className="btn" onClick={() => setBulkOpen(false)}>
-              取消
+              {t.vocab.cancel}
             </button>
             <button className="btn primary" disabled={!bulk.trim()} onClick={importBulk}>
-              导入
+              {t.vocab.import}
             </button>
           </div>
         </div>
@@ -130,39 +129,39 @@ export function VocabPage() {
       <div className="card word-form">
         <div className="word-form-grid">
           <label>
-            单词 *
+            {t.vocab.word}
             <div className="row-gap">
-              <input value={draft.word} onChange={(e) => set('word', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && lookUp()} placeholder="输入后按回车查词典" autoFocus />
+              <input value={draft.word} onChange={(e) => set('word', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && lookUp()} placeholder={t.vocab.wordPlaceholder} autoFocus />
               <button className="btn small" onClick={lookUp} disabled={!draft.word.trim()}>
-                查词典
+                {t.vocab.lookup}
               </button>
             </div>
             {lookup && <span className="hint">{lookup}</span>}
-            {duplicate && <span className="hint warn">单词本里已经有这个词了</span>}
+            {duplicate && <span className="hint warn">{t.vocab.duplicate}</span>}
           </label>
           <label>
-            词性
-            <input value={draft.partOfSpeech} onChange={(e) => set('partOfSpeech', e.target.value)} placeholder="v. / adj. / n." />
+            {t.vocab.pos}
+            <input value={draft.partOfSpeech} onChange={(e) => set('partOfSpeech', e.target.value)} placeholder={t.vocab.posPlaceholder} />
           </label>
           <label>
-            中文
-            <input value={draft.chinese} onChange={(e) => set('chinese', e.target.value)} placeholder="中文意思" />
+            {t.vocab.chinese}
+            <input value={draft.chinese} onChange={(e) => set('chinese', e.target.value)} placeholder={t.vocab.chinesePlaceholder} />
           </label>
           <label className="span3">
-            英文释义
+            {t.vocab.definition}
             <input value={draft.definition} onChange={(e) => set('definition', e.target.value)} />
           </label>
           <label className="span3">
-            例句（最好用题目原句）
+            {t.vocab.example}
             <input value={draft.example} onChange={(e) => set('example', e.target.value)} />
           </label>
           <label>
-            来源
-            <input value={draft.source} onChange={(e) => set('source', e.target.value)} placeholder="如 10月北美A卷" />
+            {t.vocab.source}
+            <input value={draft.source} onChange={(e) => set('source', e.target.value)} placeholder={t.vocab.sourcePlaceholder} />
           </label>
           <label className="span2">
-            笔记
-            <input value={draft.notes} onChange={(e) => set('notes', e.target.value)} placeholder="近义词、易混词、词根…" />
+            {t.vocab.notes}
+            <input value={draft.notes} onChange={(e) => set('notes', e.target.value)} placeholder={t.vocab.notesPlaceholder} />
           </label>
         </div>
         <div className="modal-foot">
@@ -174,24 +173,24 @@ export function VocabPage() {
                 setDraft(emptyDraft())
               }}
             >
-              取消编辑
+              {t.vocab.cancelEdit}
             </button>
           )}
           <button className="btn primary" disabled={!draft.word.trim() || duplicate} onClick={save}>
-            {editingId ? '保存修改' : '加入单词本'}
+            {editingId ? t.vocab.saveEdit : t.vocab.add}
           </button>
         </div>
       </div>
 
       <div className="filters">
-        <input className="search" placeholder="搜索单词或释义…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="search" placeholder={t.vocab.search} value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="seg">
           {(
             [
-              ['all', '全部'],
-              ['new', '新词'],
-              ['due', '待复习'],
-              ['hard', '易忘（忘过 2 次+）'],
+              ['all', t.vocab.filterAll],
+              ['new', t.vocab.filterNew],
+              ['due', t.vocab.filterDue],
+              ['hard', t.vocab.filterHard],
             ] as [Filter, string][]
           ).map(([v, label]) => (
             <button key={v} className={filter === v ? 'on' : ''} onClick={() => setFilter(v)}>
@@ -208,7 +207,7 @@ export function VocabPage() {
               <span className="word">{w.word}</span>
               {w.partOfSpeech && <span className="pos">{w.partOfSpeech}</span>}
               <span className="zh">{w.chinese}</span>
-              <span className={`due ${isDue(w.srs) && w.srs.reps > 0 ? 'now' : ''}`}>{dueLabel(w)}</span>
+              <span className={`due ${isDue(w.srs) && w.srs.reps > 0 ? 'now' : ''}`}>{dueLabel(w, t)}</span>
             </div>
             {w.definition && <div className="def">{w.definition}</div>}
             {w.example && <div className="example">“{w.example}”</div>}
@@ -226,25 +225,25 @@ export function VocabPage() {
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
               >
-                编辑
+                {t.vocab.edit}
               </button>
-              <button className="btn small danger" onClick={() => confirm(`删除 ${w.word}？`) && deleteWord(w.id)}>
-                删除
+              <button className="btn small danger" onClick={() => confirm(t.vocab.confirmDelete(w.word)) && deleteWord(w.id)}>
+                {t.vocab.delete}
               </button>
             </div>
           </div>
         ))}
-        {shown.length === 0 && <div className="empty">没有单词</div>}
+        {shown.length === 0 && <div className="empty">{t.vocab.empty}</div>}
       </div>
     </div>
   )
 }
 
-function dueLabel(w: Word) {
-  if (w.srs.reps === 0) return '新词'
+function dueLabel(w: Word, t: Messages) {
+  if (w.srs.reps === 0) return t.vocab.fresh
   const days = Math.ceil((w.srs.due - Date.now()) / 86400000)
-  if (days <= 0) return '待复习'
-  return `${days} 天后复习`
+  if (days <= 0) return t.vocab.due
+  return t.vocab.reviewIn(days)
 }
 
 function abbreviate(pos: string) {

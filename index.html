@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SAT Study · 错题本与单词</title>
+    <script>
+      try {
+        if (localStorage.getItem('sat-study:lang') === 'en') {
+          document.documentElement.lang = 'en'
+          document.title = 'SAT Study · Mistakes & Vocabulary'
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

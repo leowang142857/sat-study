@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { fileToCompressedDataUrl, imagesFromClipboard } from '../image'
+import { useI18n } from '../i18n'
 
 interface Props {
   images: string[]
@@ -10,6 +11,7 @@ interface Props {
 
 /** Listens for paste on the whole window while mounted, so ⌘V works without focusing the zone. */
 export function ImageDropZone({ images, onChange, onAdded, renderActions }: Props) {
+  const { t } = useI18n()
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const latest = useRef({ images, onChange, onAdded })
@@ -50,7 +52,8 @@ export function ImageDropZone({ images, onChange, onAdded, renderActions }: Prop
           addFiles(Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/')))
         }}
       >
-        <strong>⌘V 粘贴截图</strong>，或拖拽图片到这里 / 点击选择文件
+        <strong>{t.drop.lead}</strong>
+        {t.drop.rest}
       </div>
       <input
         ref={fileRef}
@@ -68,8 +71,8 @@ export function ImageDropZone({ images, onChange, onAdded, renderActions }: Prop
           {images.map((src, i) => (
             <div key={i} className="thumb-wrap">
               <div className="thumb">
-                <img src={src} alt={`截图 ${i + 1}`} />
-                <button type="button" className="thumb-remove" onClick={() => onChange(images.filter((_, j) => j !== i))} title="删除">
+                <img src={src} alt={t.common.screenshotAlt(i + 1)} />
+                <button type="button" className="thumb-remove" onClick={() => onChange(images.filter((_, j) => j !== i))} title={t.common.deleteShot}>
                   ×
                 </button>
               </div>
