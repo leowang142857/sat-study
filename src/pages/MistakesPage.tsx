@@ -4,6 +4,7 @@ import { LETTERS } from '../types'
 import { QUESTION_TYPES } from '../constants'
 import { qtypeLabel } from '../messages'
 import { useI18n } from '../i18n'
+import { isPracticeItem } from '../questions'
 import { useStore } from '../store'
 import { MistakeEditor, blankMistake } from '../components/MistakeEditor'
 import { RichText } from '../components/RichText'
@@ -11,8 +12,9 @@ import { RichText } from '../components/RichText'
 type Status = 'all' | 'open' | 'mastered'
 
 export function MistakesPage() {
-  const { mistakes, saveMistake, deleteMistake } = useStore()
+  const { mistakes: all, saveMistake, deleteMistake } = useStore()
   const { t } = useI18n()
+  const mistakes = all.filter((m) => !isPracticeItem(m))
   const [editing, setEditing] = useState<{ m: Mistake; isNew: boolean } | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -128,9 +130,9 @@ function MistakeCard({ m, open, onToggle, onEdit, onDelete, onMastered }: { m: M
           <div className="meta">
             <span className={`chip ${m.section === 'RW' ? 'rw' : 'math'}`}>{m.section === 'RW' ? t.common.sectionRW : t.common.sectionMath}</span>
             {m.questionType && <span className="chip">{qtypeLabel(t, m.questionType)}</span>}
-            {m.tags.map((tag) => (
-              <span key={tag} className="chip tag">
-                {tag}
+            {m.tags.map((t) => (
+              <span key={t} className="chip tag">
+                {t}
               </span>
             ))}
             {m.mastered && <span className="chip ok">{t.mistakes.mastered}</span>}

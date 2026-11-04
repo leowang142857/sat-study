@@ -36,6 +36,7 @@ const zh = {
   loading: '加载中…',
   nav: {
     mistakes: '错题本',
+    sets: '题集',
     practice: '重做练习',
     vocab: '单词本',
     cards: '闪卡复习',
@@ -43,12 +44,26 @@ const zh = {
   },
   backup: {
     export: '导出备份',
-    exportTitle: '把所有错题和单词下载成一个 JSON 文件',
+    exportTitle: '把错题、题集和单词下载成一个 JSON 文件',
     import: '导入备份',
+    importTitle: '恢复错题和单词。不会把题集文件写进错题本。',
+    importSet: '导入题集',
+    importSetTitle: '把 JSON 题目导入为练习题集，不记入错题',
     done: (mistakes: number, words: number) => `导入完成：${mistakes} 道错题，${words} 个单词`,
+    doneWithPractice: (mistakes: number, practice: number, words: number) => `导入完成：${mistakes} 道错题，${practice} 道题集题目，${words} 个单词`,
     failed: (message: string) => `导入失败：${message}`,
     notBackup: '这不是 sat-study 的备份文件',
-    badJson: '文件内容不是有效的 JSON',
+    badJson: '文件不是有效的 JSON',
+    practiceFile: '这是题集文件。请点「导入题集」，这样不会记入错题本。',
+    noQuestions: '没有可导入的题目。每题至少要有文章或题干，以及正确答案。',
+    practiceImport: (r: { name: string; added: number; duplicate: number; invalid: number; ignoredWords: number }) => {
+      const parts = [`题集「${r.name}」新增 ${r.added} 题`]
+      if (r.duplicate) parts.push(`跳过重复 ${r.duplicate} 题`)
+      if (r.invalid) parts.push(`跳过无效 ${r.invalid} 题`)
+      parts.push('这些题不会进入错题本')
+      if (r.ignoredWords) parts.push(`未导入 ${r.ignoredWords} 个单词（单词请用「导入备份」）`)
+      return parts.join('，')
+    },
   },
   common: {
     edit: '编辑',
@@ -129,6 +144,20 @@ const zh = {
     imageOnly: (n: number) => ` · 有 ${n} 道错题还没有文字，先去错题本点「识别文字」`,
     start: '开始练习',
     examTitle: (section: Section) => `错题重做：${section === 'RW' ? '阅读文法' : '数学'}`,
+    content: '内容',
+    redo: '错题重做',
+    setPractice: '题集练习',
+    setSubtitle: '按题集做整组练习。做对做错都留在题集里，不会自动变成错题。',
+    set: '题集',
+    imageOnlySet: (n: number) => ` · 有 ${n} 道题还没有文字，无法练习`,
+    setExamTitle: (name: string) => `题集练习：${name}`,
+    setAccuracy: (pct: number) => `正确率 ${pct}% · 结果记在题集上，不会自动进入错题本`,
+    fileWrong: '记入错题本',
+    filedAdded: '已记入错题本',
+    filedExists: '错题本已有',
+    againSet: '返回题集',
+    lastOk: '上次 ✓',
+    lastBad: '上次 ✗',
     confirmExit: '退出后本次作答不会保存，确定退出？',
     score: (right: number, total: number) => `本次得分 ${right} / ${total}`,
     accuracy: (pct: number) => `正确率 ${pct}% · 结果已记录到每道错题`,
@@ -207,6 +236,7 @@ const zh = {
     title: '统计',
     weakest: (label: string, open: number) => `目前最该练的题型：${label}（${open} 道未掌握）`,
     noneOpen: '还没有未掌握的错题',
+    alsoPractice: (n: number) => ` · 另有 ${n} 道题集题目，不计入错题`,
     sectionRW: '阅读文法',
     sectionMath: '数学',
     total: '错题总数',
@@ -238,6 +268,14 @@ const zh = {
     close: '关闭',
     paste: '1. 粘贴截图',
     pasteHint: '会自动识别成文字题目（左栏 → 文章，右栏 → 问题和选项，蓝框 → 你当时的答案）',
+    pasteHintPractice: '会自动识别成文字题目（左栏 → 文章，右栏 → 问题和选项）。这是练习题，不会记入错题本。',
+    addPractice: '录入练习题',
+    editPractice: '编辑练习题',
+    setName: '题集名称',
+    setNamePlaceholder: '例：2024年3月 Practice Test 6',
+    explanationOptional: '解析（可选）',
+    explanationPracticePlaceholder: '做完再看的说明，不会当成错因',
+    saveToSet: '保存到题集',
     recognize: '识别文字',
     crop: '框选图表',
     figures: '练习时显示的图表：',
@@ -287,6 +325,29 @@ const zh = {
     lead: '⌘V 粘贴截图',
     rest: '，或拖拽图片到这里 / 点击选择文件',
   },
+  sets: {
+    title: '题集',
+    summary: (questions: number, sets: number) => `共 ${questions} 道练习题 · ${sets} 个题集。这里的题不是错题，不会出现在错题本和错题统计里。`,
+    import: '导入题集',
+    add: '+ 录入练习题',
+    format: '题集 JSON 格式',
+    formatHint: '用「导入题集」会把题目存成练习题。同一文件再导入会跳过重复题。错题备份请用右上角「导入备份」，两条路径互不覆盖。',
+    empty: '还没有题集。点「导入题集」选一个 JSON，或「录入练习题」逐题添加。',
+    chip: '题集',
+    rwCount: (n: number) => `阅读文法 ${n}`,
+    mathCount: (n: number) => `数学 ${n}`,
+    progress: (total: number, practiced: number) => `${total} 题 · 已练 ${practiced} 题`,
+    collapse: '收起',
+    view: '查看题目',
+    addOne: '加一题',
+    deleteSet: '删除题集',
+    start: '开始练习',
+    confirmDeleteSet: (name: string, n: number) => `确定删除题集「${name}」的 ${n} 道题？错题本不受影响。`,
+    confirmDeleteQuestion: '确定从题集删除这道题？',
+    examTitle: (name: string) => `题集：${name}`,
+    untitled: '未命名题集',
+    correct: '正确答案',
+  },
   cropper: {
     title: '框选图表',
     hint: '按住鼠标拖出一个框，只框图表/表格，不要框进选项',
@@ -329,6 +390,7 @@ const en: Widen<typeof zh> = {
   loading: 'Loading…',
   nav: {
     mistakes: 'Mistakes',
+    sets: 'Sets',
     practice: 'Practice',
     vocab: 'Words',
     cards: 'Cards',
@@ -336,13 +398,28 @@ const en: Widen<typeof zh> = {
   },
   backup: {
     export: 'Export',
-    exportTitle: 'Download every mistake and word as one JSON file',
+    exportTitle: 'Download mistakes, practice sets, and words as one JSON file',
     import: 'Import',
+    importTitle: 'Restore mistakes and words. A practice-set file is not written into the mistake book.',
+    importSet: 'Import set',
+    importSetTitle: 'Import JSON questions as a practice set. They are not counted as mistakes.',
     done: (mistakes, words) =>
       `Imported ${mistakes} mistake${mistakes === 1 ? '' : 's'} and ${words} word${words === 1 ? '' : 's'}`,
+    doneWithPractice: (mistakes, practice, words) =>
+      `Imported ${mistakes} mistake${mistakes === 1 ? '' : 's'}, ${practice} practice question${practice === 1 ? '' : 's'}, and ${words} word${words === 1 ? '' : 's'}`,
     failed: (message) => `Import failed: ${message}`,
     notBackup: 'this is not a sat-study backup file',
     badJson: 'the file is not valid JSON',
+    practiceFile: 'This is a practice-set file. Use “Import set” so it is not added to the mistake book.',
+    noQuestions: 'No questions to import. Each question needs a passage or stem, and a correct answer.',
+    practiceImport: (r) => {
+      const parts = [`Set “${r.name}”: ${r.added} new`]
+      if (r.duplicate) parts.push(`${r.duplicate} duplicate${r.duplicate === 1 ? '' : 's'} skipped`)
+      if (r.invalid) parts.push(`${r.invalid} invalid skipped`)
+      parts.push('these are not added to the mistake book')
+      if (r.ignoredWords) parts.push(`${r.ignoredWords} word${r.ignoredWords === 1 ? '' : 's'} left out (use Import for words)`)
+      return parts.join('; ')
+    },
   },
   common: {
     edit: 'Edit',
@@ -423,6 +500,20 @@ const en: Widen<typeof zh> = {
     imageOnly: (n) => ` · ${n} mistake${n === 1 ? '' : 's'} still have no text. Open the mistake book and run “Recognize text”.`,
     start: 'Start',
     examTitle: (section) => `Mistake redo: ${section === 'RW' ? 'Reading and Writing' : 'Math'}`,
+    content: 'Content',
+    redo: 'Redo mistakes',
+    setPractice: 'Practice set',
+    setSubtitle: 'Work through a whole set. Right and wrong stay on the set and are not turned into mistakes.',
+    set: 'Set',
+    imageOnlySet: (n) => ` · ${n} question${n === 1 ? '' : 's'} still have no text and can’t be practiced`,
+    setExamTitle: (name) => `Practice set: ${name}`,
+    setAccuracy: (pct) => `${pct}% correct · saved on the set, not added to the mistake book`,
+    fileWrong: 'Add to mistake book',
+    filedAdded: 'Added to mistake book',
+    filedExists: 'Already in the mistake book',
+    againSet: 'Back to sets',
+    lastOk: 'Last ✓',
+    lastBad: 'Last ✗',
     confirmExit: 'Leaving now discards this attempt. Leave anyway?',
     score: (right, total) => `Score ${right} / ${total}`,
     accuracy: (pct) => `${pct}% correct · saved on each mistake`,
@@ -501,6 +592,7 @@ const en: Widen<typeof zh> = {
     title: 'Stats',
     weakest: (label, open) => `Practice this type next: ${label} (${open} still open)`,
     noneOpen: 'No open mistakes',
+    alsoPractice: (n) => ` · ${n} practice-set question${n === 1 ? '' : 's'} not counted as mistakes`,
     sectionRW: 'Reading & Writing',
     sectionMath: 'Math',
     total: 'Mistakes',
@@ -532,6 +624,14 @@ const en: Widen<typeof zh> = {
     close: 'Close',
     paste: '1. Paste a screenshot',
     pasteHint: 'It is read into a text question (left column → passage, right column → question and choices, blue box → the answer you picked)',
+    pasteHintPractice: 'It is read into a text question (left column → passage, right column → question and choices). This is practice and is not added to the mistake book.',
+    addPractice: 'Add practice question',
+    editPractice: 'Edit practice question',
+    setName: 'Set name',
+    setNamePlaceholder: 'e.g. March 2024 Practice Test 6',
+    explanationOptional: 'Explanation (optional)',
+    explanationPracticePlaceholder: 'Notes to read after you finish. Not treated as a mistake reason.',
+    saveToSet: 'Save to set',
     recognize: 'Recognize text',
     crop: 'Crop figure',
     figures: 'Figures shown in practice:',
@@ -580,6 +680,29 @@ const en: Widen<typeof zh> = {
   drop: {
     lead: '⌘V to paste a screenshot',
     rest: ', or drop an image here / click to choose a file',
+  },
+  sets: {
+    title: 'Sets',
+    summary: (questions, sets) => `${questions} practice question${questions === 1 ? '' : 's'} · ${sets} set${sets === 1 ? '' : 's'}. These are not mistakes and do not show up in the mistake book or mistake stats.`,
+    import: 'Import set',
+    add: '+ Add practice question',
+    format: 'Practice-set JSON',
+    formatHint: '“Import set” stores questions as practice. Importing the same file again skips duplicates. Mistake backups use “Import” in the header. The two paths do not overwrite each other.',
+    empty: 'No sets yet. Use “Import set” to choose a JSON file, or “Add practice question” to enter one.',
+    chip: 'Set',
+    rwCount: (n) => `Reading & Writing ${n}`,
+    mathCount: (n) => `Math ${n}`,
+    progress: (total, practiced) => `${total} question${total === 1 ? '' : 's'} · ${practiced} practiced`,
+    collapse: 'Hide',
+    view: 'View questions',
+    addOne: 'Add one',
+    deleteSet: 'Delete set',
+    start: 'Start',
+    confirmDeleteSet: (name, n) => `Delete all ${n} question${n === 1 ? '' : 's'} in “${name}”? The mistake book is not affected.`,
+    confirmDeleteQuestion: 'Remove this question from the set?',
+    examTitle: (name) => `Set: ${name}`,
+    untitled: 'Untitled set',
+    correct: 'Correct answer',
   },
   cropper: {
     title: 'Crop a figure',
@@ -630,4 +753,13 @@ export function qtypeLabel(t: Messages, id: string): string {
 
 export function sectionName(t: Messages, section: Section): string {
   return section === 'RW' ? t.common.sectionRW : t.common.sectionMath
+}
+
+export function importErrorDetail(err: unknown, t: Messages): string {
+  const message = err instanceof Error ? err.message : String(err)
+  if (message === 'bad-json' || err instanceof SyntaxError) return t.backup.badJson
+  if (message === 'not-backup') return t.backup.notBackup
+  if (message === 'practice-file') return t.backup.practiceFile
+  if (message === 'no-questions') return t.backup.noQuestions
+  return message
 }

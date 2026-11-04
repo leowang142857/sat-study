@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { I18nProvider, LanguageToggle, useI18n } from './i18n'
+import { importErrorDetail } from './messages'
 import { StoreProvider, useStore } from './store'
 import { MistakesPage } from './pages/MistakesPage'
+import { SetsPage } from './pages/SetsPage'
 import { PracticePage } from './pages/PracticePage'
 import { VocabPage } from './pages/VocabPage'
 import { FlashcardsPage } from './pages/FlashcardsPage'
 import { StatsPage } from './pages/StatsPage'
 import { isDue } from './srs'
 
-const PAGE_IDS = ['mistakes', 'practice', 'vocab', 'cards', 'stats'] as const
+const PAGE_IDS = ['mistakes', 'sets', 'practice', 'vocab', 'cards', 'stats'] as const
 type PageId = (typeof PAGE_IDS)[number]
 
 function readHash(): PageId {
@@ -17,11 +19,12 @@ function readHash(): PageId {
 }
 
 function Shell() {
-  const { ready, words, exportBackup, importBackup } = useStore()
+  const { ready, words, exportBackup, importBackup, importPracticeSet } = useStore()
   const { t } = useI18n()
   const [page, setPage] = useState<PageId>(readHash)
   const [inExam, setInExam] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const setFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const onHash = () => setPage(readHash())
@@ -32,6 +35,7 @@ function Shell() {
   const dueCount = words.filter((w) => isDue(w.srs)).length
   const labels: Record<PageId, string> = {
     mistakes: t.nav.mistakes,
+    sets: t.nav.sets,
     practice: t.nav.practice,
     vocab: t.nav.vocab,
     cards: t.nav.cards,
@@ -58,8 +62,11 @@ function Shell() {
             <button className="btn ghost small" onClick={exportBackup} title={t.backup.exportTitle}>
               {t.backup.export}
             </button>
-            <button className="btn ghost small" onClick={() => fileRef.current?.click()}>
+            <button className="btn ghost small" onClick={() => fileRef.current?.click()} title={t.backup.importTitle}>
               {t.backup.import}
+            </button>
+            <button className="btn ghost small" onClick={() => setFileRef.current?.click()} title={t.backup.importSetTitle}>
+              {t.backup.importSet}
             </button>
             <input
               ref={fileRef}
@@ -72,11 +79,27 @@ function Shell() {
                 if (!f) return
                 try {
                   const r = await importBackup(f)
-                  alert(t.backup.done(r.mistakes, r.words))
+                  alert(r.practice ? t.backup.doneWithPractice(r.mistakes, r.practice, r.words) : t.backup.done(r.mistakes, r.words))
                 } catch (err) {
-                  const message = (err as Error).message
-                  const detail = message === 'not-backup' ? t.backup.notBackup : err instanceof SyntaxError ? t.backup.badJson : message
-                  alert(t.backup.failed(detail))
+                  alert(t.backup.failed(importErrorDetail(err, t)))
+                }
+              }}
+            />
+            <input
+              ref={setFileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (!f) return
+                try {
+                  const r = await importPracticeSet(f)
+                  location.hash = 'sets'
+                  alert(t.backup.practiceImport(r))
+                } catch (err) {
+                  alert(t.backup.failed(importErrorDetail(err, t)))
                 }
               }}
             />
@@ -85,6 +108,7 @@ function Shell() {
       )}
       <main className={inExam ? 'main exam-main' : 'main'}>
         {page === 'mistakes' && <MistakesPage />}
+        {page === 'sets' && <SetsPage onExamChange={setInExam} />}
         {page === 'practice' && <PracticePage onExamChange={setInExam} />}
         {page === 'vocab' && <VocabPage />}
         {page === 'cards' && <FlashcardsPage />}

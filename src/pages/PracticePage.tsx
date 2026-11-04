@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Mistake, Section } from '../types'
-import { LETTERS } from '../types'
 import { QUESTION_TYPES } from '../constants'
 import { qtypeLabel } from '../messages'
 import { useI18n } from '../i18n'
+import { isCorrect } from '../grade'
+import { isPracticeItem, practiceSetName, sameQuestion, sourceRoot, asWrongCopy } from '../questions'
 import { useStore } from '../store'
 import { ExamRunner, type ExamAnswer } from '../components/ExamRunner'
-import { RichText } from '../components/RichText'
+import { PracticeResult } from '../components/PracticeResult'
 
 type TimerMode = 'none' | 'countdown' | 'countup'
+type Pool = 'wrong' | 'practice'
 const SECONDS_PER_Q: Record<Section, number> = { RW: 71, Math: 95 }
 
 interface Session {
   items: Mistake[]
   section: Section
   timer: TimerMode
+  pool: Pool
+  source: string
 }
 
 export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => void }) {
-  const { mistakes, saveMistakes } = useStore()
+  const { mistakes, saveMistake, saveMistakes } = useStore()
   const { t } = useI18n()
+  const [poolKind, setPoolKind] = useState<Pool>('wrong')
   const [section, setSection] = useState<Section>('RW')
   const [types, setTypes] = useState<string[]>([])
   const [source, setSource] = useState('all')
@@ -28,21 +33,32 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
   const [count, setCount] = useState(27)
   const [timer, setTimer] = useState<TimerMode>('countdown')
   const [session, setSession] = useState<Session | null>(null)
-  const [result, setResult] = useState<{ items: Mistake[]; answers: ExamAnswer[] } | null>(null)
+  const [result, setResult] = useState<{ items: Mistake[]; pool: Pool } | null>(null)
 
   useEffect(() => onExamChange(!!session), [session, onExamChange])
 
+  const bank = useMemo(() => mistakes.filter((m) => (poolKind === 'practice' ? isPracticeItem(m) : !isPracticeItem(m))), [mistakes, poolKind])
   const practicable = (m: Mistake) => !!(m.passage.trim() || m.question.trim())
-  const sources = useMemo(() => [...new Set(mistakes.map((m) => m.source.replace(/\s*·\s*Q\d+$/, '')).filter(Boolean))], [mistakes])
-  const pool = mistakes.filter(
+  const sources = useMemo(() => {
+    if (poolKind === 'practice') return [...new Set(bank.map((m) => practiceSetName(m)))]
+    return [...new Set(bank.map((m) => sourceRoot(m.source)).filter(Boolean))]
+  }, [bank, poolKind])
+  const pool = bank.filter(
     (m) =>
       m.section === section &&
       practicable(m) &&
       (!onlyOpen || !m.mastered) &&
       (types.length === 0 || types.includes(m.questionType)) &&
-      (source === 'all' || m.source.startsWith(source)),
+      (source === 'all' || (poolKind === 'practice' ? practiceSetName(m) === source : m.source.startsWith(source))),
   )
-  const imageOnly = mistakes.filter((m) => m.section === section && !practicable(m)).length
+  const imageOnly = bank.filter((m) => m.section === section && !practicable(m)).length
+
+  function choosePool(next: Pool) {
+    setPoolKind(next)
+    setSource('all')
+    setTypes([])
+    setOnlyOpen(next === 'wrong')
+  }
 
   function start() {
     let items = [...pool]
@@ -50,7 +66,7 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
     else items.sort((a, b) => a.createdAt - b.createdAt)
     items = items.slice(0, count)
     setResult(null)
-    setSession({ items, section, timer })
+    setSession({ items, section, timer, pool: poolKind, source })
   }
 
   async function finish(answers: ExamAnswer[]) {
@@ -61,15 +77,26 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
       return { ...m, reviews: [...m.reviews, { at: now, correct: isCorrect(m, a), answer: a }] }
     })
     await saveMistakes(updated)
-    setResult({ items: updated, answers })
+    setResult({ items: updated, pool: session.pool })
     setSession(null)
+  }
+
+  async function fileWrong(m: Mistake) {
+    const answer = m.reviews.at(-1)?.answer ?? ''
+    if (mistakes.some((x) => !isPracticeItem(x) && sameQuestion(x, m))) return 'exists' as const
+    await saveMistake(asWrongCopy(m, answer))
+    return 'added' as const
   }
 
   if (session) {
     const limit = session.timer === 'countdown' ? session.items.length * SECONDS_PER_Q[session.section] : null
     return (
       <ExamRunner
-        title={t.practice.examTitle(session.section)}
+        title={
+          session.pool === 'practice'
+            ? t.practice.setExamTitle(session.source === 'all' ? (session.section === 'RW' ? t.common.sectionRW : t.common.sectionMath) : session.source === '未命名题集' ? t.sets.untitled : session.source)
+            : t.practice.examTitle(session.section)
+        }
         items={session.items}
         timeLimit={limit}
         showTimer={session.timer !== 'none'}
@@ -79,18 +106,42 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
     )
   }
 
-  if (result) return <ResultView result={result} onAgain={() => setResult(null)} onSave={saveMistakes} />
+  if (result) {
+    return (
+      <PracticeResult
+        items={result.items}
+        pool={result.pool}
+        onAgain={() => setResult(null)}
+        onSave={saveMistakes}
+        onFileWrong={result.pool === 'practice' ? fileWrong : undefined}
+      />
+    )
+  }
+
+  const practice = poolKind === 'practice'
 
   return (
     <div className="page narrow">
       <div className="page-head">
         <div>
-          <h1>{t.practice.title}</h1>
-          <p className="sub">{t.practice.subtitle}</p>
+          <h1>{practice ? t.practice.setPractice : t.practice.title}</h1>
+          <p className="sub">{practice ? t.practice.setSubtitle : t.practice.subtitle}</p>
         </div>
       </div>
 
       <div className="card setup">
+        <div className="setup-row">
+          <span className="setup-label">{t.practice.content}</span>
+          <div className="seg">
+            <button className={poolKind === 'wrong' ? 'on' : ''} onClick={() => choosePool('wrong')}>
+              {t.practice.redo}
+            </button>
+            <button className={poolKind === 'practice' ? 'on' : ''} onClick={() => choosePool('practice')}>
+              {t.practice.setPractice}
+            </button>
+          </div>
+        </div>
+
         <div className="setup-row">
           <span className="setup-label">{t.practice.module}</span>
           <div className="seg">
@@ -109,7 +160,7 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
               {t.common.all}
             </button>
             {QUESTION_TYPES[section].map((id) => {
-              const n = mistakes.filter((m) => m.section === section && m.questionType === id && practicable(m) && (!onlyOpen || !m.mastered)).length
+              const n = bank.filter((m) => m.section === section && m.questionType === id && practicable(m) && (!onlyOpen || !m.mastered)).length
               return (
                 <button
                   key={id}
@@ -125,12 +176,12 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
         </div>
 
         <div className="setup-row">
-          <span className="setup-label">{t.practice.source}</span>
+          <span className="setup-label">{practice ? t.practice.set : t.practice.source}</span>
           <select value={source} onChange={(e) => setSource(e.target.value)}>
             <option value="all">{t.common.all}</option>
             {sources.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {s === '未命名题集' ? t.sets.untitled : s}
               </option>
             ))}
           </select>
@@ -169,124 +220,12 @@ export function PracticePage({ onExamChange }: { onExamChange: (v: boolean) => v
         <div className="setup-foot">
           <span>
             {t.practice.pool(pool.length, Math.min(pool.length, count))}
-            {imageOnly > 0 && <span className="hint">{t.practice.imageOnly(imageOnly)}</span>}
+            {imageOnly > 0 && <span className="hint">{practice ? t.practice.imageOnlySet(imageOnly) : t.practice.imageOnly(imageOnly)}</span>}
           </span>
           <button className="btn primary" disabled={pool.length === 0} onClick={start}>
             {t.practice.start}
           </button>
         </div>
-      </div>
-    </div>
-  )
-}
-
-function isCorrect(m: Mistake, answer: string): boolean {
-  if (!answer) return false
-  if (m.format === 'mc') return answer.toUpperCase() === m.correct.toUpperCase()
-  const norm = (s: string) => s.replace(/\s/g, '').toLowerCase()
-  const num = (s: string) => {
-    const t = norm(s)
-    if (/^-?\d+\/\d+$/.test(t)) {
-      const [a, b] = t.split('/').map(Number)
-      return b ? a / b : NaN
-    }
-    return Number(t)
-  }
-  return m.correct
-    .split(/[,，;；]|\bor\b/)
-    .map((c) => c.trim())
-    .filter(Boolean)
-    .some((c) => norm(c) === norm(answer) || (!isNaN(num(c)) && Math.abs(num(c) - num(answer)) < 1e-3))
-}
-
-function ResultView({ result, onAgain, onSave }: { result: { items: Mistake[]; answers: ExamAnswer[] }; onAgain: () => void; onSave: (ms: Mistake[]) => Promise<void> }) {
-  const { t } = useI18n()
-  const [items, setItems] = useState(result.items)
-  const [open, setOpen] = useState<number | null>(null)
-  const right = items.filter((m) => m.reviews.at(-1)?.correct).length
-
-  async function toggleMastered(i: number) {
-    const m = { ...items[i], mastered: !items[i].mastered, updatedAt: Date.now() }
-    await onSave([m])
-    setItems((l) => l.map((x, j) => (j === i ? m : x)))
-  }
-
-  async function masterAllCorrect() {
-    const updated = items.map((m) => (m.reviews.at(-1)?.correct ? { ...m, mastered: true, updatedAt: Date.now() } : m))
-    await onSave(updated)
-    setItems(updated)
-  }
-
-  return (
-    <div className="page narrow">
-      <div className="page-head">
-        <div>
-          <h1>{t.practice.score(right, items.length)}</h1>
-          <p className="sub">{t.practice.accuracy(items.length ? Math.round((right / items.length) * 100) : 0)}</p>
-        </div>
-        <div className="row-gap">
-          <button className="btn" onClick={masterAllCorrect}>
-            {t.practice.markAllCorrect}
-          </button>
-          <button className="btn primary" onClick={onAgain}>
-            {t.practice.again}
-          </button>
-        </div>
-      </div>
-
-      <div className="result-list">
-        {items.map((m, i) => {
-          const last = m.reviews.at(-1)!
-          return (
-            <div key={m.id} className={`card result ${last.correct ? 'ok' : 'bad'}`}>
-              <div className="result-row" onClick={() => setOpen(open === i ? null : i)}>
-                <span className="qnum">{i + 1}</span>
-                <span className={last.correct ? 'correct-text' : 'wrong-text'}>{last.correct ? '✓' : '✗'}</span>
-                <span className="result-src">
-                  {m.source} · {qtypeLabel(t, m.questionType)}
-                </span>
-                <span>
-                  {t.practice.yourAnswer} <b className={last.correct ? 'correct-text' : 'wrong-text'}>{last.answer || t.practice.unanswered}</b> · {t.practice.correct}{' '}
-                  <b className="correct-text">{m.correct}</b>
-                </span>
-                <button
-                  className="btn small"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleMastered(i)
-                  }}
-                >
-                  {m.mastered ? t.practice.masteredCheck : t.practice.markMastered}
-                </button>
-              </div>
-              {open === i && (
-                <div className="mistake-detail">
-                  {m.figures.map((src, k) => (
-                    <img key={k} className="detail-img" src={src} alt="" />
-                  ))}
-                  {m.passage && <RichText className="passage-text" text={m.passage} />}
-                  {m.question && <p className="question-text">{m.question}</p>}
-                  {m.format === 'mc' && (
-                    <ul className="detail-choices">
-                      {LETTERS.map((l) => (
-                        <li key={l} className={l === m.correct ? 'is-correct' : l === last.answer ? 'is-wrong' : ''}>
-                          <span className="letter-pill">{l}</span>
-                          <span>{m.choices[l]}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {m.explanation && (
-                    <div className="explanation">
-                      <div className="field-label">{t.practice.explanation}</div>
-                      {m.explanation}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
       </div>
     </div>
   )

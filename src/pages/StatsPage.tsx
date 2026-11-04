@@ -3,14 +3,17 @@ import type { Section } from '../types'
 import { QUESTION_TYPES } from '../constants'
 import { qtypeLabel } from '../messages'
 import { useI18n } from '../i18n'
+import { isPracticeItem } from '../questions'
 import { useStore } from '../store'
 import { isDue } from '../srs'
 
 const DAY = 86400000
 
 export function StatsPage() {
-  const { mistakes, words } = useStore()
+  const { mistakes: all, words } = useStore()
   const { t } = useI18n()
+  const mistakes = all.filter((m) => !isPracticeItem(m))
+  const practiceCount = all.length - mistakes.length
   const [section, setSection] = useState<Section>('RW')
 
   const inSection = mistakes.filter((m) => m.section === section)
@@ -29,9 +32,9 @@ export function StatsPage() {
         rate: rv.length ? Math.round((rv.filter((r) => r.correct).length / rv.length) * 100) : null,
       }
     })
-    .filter((row) => row.total > 0)
+    .filter((t) => t.total > 0)
     .sort((a, b) => b.open - a.open || (a.rate ?? -1) - (b.rate ?? -1) || b.total - a.total)
-  const maxType = Math.max(1, ...byType.map((row) => row.total))
+  const maxType = Math.max(1, ...byType.map((t) => t.total))
 
   const bySource = Object.entries(
     inSection.reduce<Record<string, number>>((acc, m) => {
@@ -42,7 +45,7 @@ export function StatsPage() {
   ).sort((a, b) => b[1] - a[1])
 
   const tags = Object.entries(
-    inSection.flatMap((m) => m.tags).reduce<Record<string, number>>((acc, tag) => ((acc[tag] = (acc[tag] ?? 0) + 1), acc), {}),
+    inSection.flatMap((m) => m.tags).reduce<Record<string, number>>((acc, t) => ((acc[t] = (acc[t] ?? 0) + 1), acc), {}),
   ).sort((a, b) => b[1] - a[1])
 
   const today = new Date()
@@ -62,14 +65,17 @@ export function StatsPage() {
   const mature = words.filter((w) => w.srs.interval >= 21)
   const dueToday = words.filter((w) => w.srs.reps > 0 && isDue(w.srs)).length
   const hardest = [...words].filter((w) => w.lapses > 0).sort((a, b) => b.lapses - a.lapses).slice(0, 8)
-  const weakest = byType.find((row) => row.open > 0)
+  const weakest = byType.find((t) => t.open > 0)
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
           <h1>{t.stats.title}</h1>
-          <p className="sub">{weakest ? t.stats.weakest(weakest.label, weakest.open) : t.stats.noneOpen}</p>
+          <p className="sub">
+            {weakest ? t.stats.weakest(weakest.label, weakest.open) : t.stats.noneOpen}
+            {practiceCount > 0 && t.stats.alsoPractice(practiceCount)}
+          </p>
         </div>
         <div className="seg">
           {(['RW', 'Math'] as Section[]).map((s) => (
@@ -139,9 +145,9 @@ export function StatsPage() {
             <>
               <h3 className="mt">{t.stats.tags}</h3>
               <div className="chips-select">
-                {tags.map(([tag, n]) => (
-                  <span key={tag} className="chip tag">
-                    {tag} × {n}
+                {tags.map(([t, n]) => (
+                  <span key={t} className="chip tag">
+                    {t} × {n}
                   </span>
                 ))}
               </div>
