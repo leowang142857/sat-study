@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Mistake, Section } from '../types'
 import { LETTERS } from '../types'
-import { qtypeLabel, importErrorDetail } from '../messages'
+import { qtypeLabel } from '../messages'
 import { useI18n } from '../i18n'
 import { isCorrect } from '../grade'
 import { asWrongCopy, isPracticeItem, practiceSetName, sameQuestion } from '../questions'
@@ -9,6 +9,7 @@ import { useStore } from '../store'
 import { ExamRunner, type ExamAnswer } from '../components/ExamRunner'
 import { MistakeEditor, blankMistake } from '../components/MistakeEditor'
 import { PracticeResult } from '../components/PracticeResult'
+import { usePracticeImport } from '../components/PracticeImport'
 import { RichText } from '../components/RichText'
 
 const SECONDS_PER_Q: Record<Section, number> = { RW: 71, Math: 95 }
@@ -36,14 +37,17 @@ interface Session {
 }
 
 export function SetsPage({ onExamChange }: { onExamChange: (v: boolean) => void }) {
-  const { mistakes, saveMistake, saveMistakes, deleteMistake, importPracticeSet } = useStore()
+  const { mistakes, saveMistake, saveMistakes, deleteMistake } = useStore()
   const { t } = useI18n()
   const practice = useMemo(() => mistakes.filter(isPracticeItem), [mistakes])
   const [openSet, setOpenSet] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ m: Mistake; isNew: boolean } | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [result, setResult] = useState<Mistake[] | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const setImport = usePracticeImport((r) => {
+    alert(t.backup.practiceImport(r))
+    setOpenSet(r.name)
+  })
 
   const groups = useMemo(() => {
     const map = new Map<string, Mistake[]>()
@@ -94,12 +98,6 @@ export function SetsPage({ onExamChange }: { onExamChange: (v: boolean) => void 
     return 'added' as const
   }
 
-  async function onFile(f: File) {
-    const r = await importPracticeSet(f)
-    alert(t.backup.practiceImport(r))
-    setOpenSet(r.name)
-  }
-
   async function removeSet(name: string, items: Mistake[]) {
     if (!confirm(t.sets.confirmDeleteSet(showSet(name, t.sets.untitled), items.length))) return
     for (const m of items) await deleteMistake(m.id)
@@ -138,28 +136,13 @@ export function SetsPage({ onExamChange }: { onExamChange: (v: boolean) => void 
           <p className="sub">{t.sets.summary(practice.length, groups.length)}</p>
         </div>
         <div className="row-gap">
-          <button className="btn" onClick={() => fileRef.current?.click()}>
+          <button className="btn" onClick={setImport.open}>
             {t.sets.import}
           </button>
           <button className="btn primary" onClick={() => setEditing({ m: blankMistake('practice'), isNew: true })}>
             {t.sets.add}
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={async (e) => {
-              const f = e.target.files?.[0]
-              e.target.value = ''
-              if (!f) return
-              try {
-                await onFile(f)
-              } catch (err) {
-                alert(t.backup.failed(importErrorDetail(err, t)))
-              }
-            }}
-          />
+          {setImport.ui}
         </div>
       </div>
 
@@ -167,6 +150,7 @@ export function SetsPage({ onExamChange }: { onExamChange: (v: boolean) => void 
         <summary>{t.sets.format}</summary>
         <p className="sub">{t.sets.formatHint}</p>
         <pre className="format-sample">{SAMPLE}</pre>
+        <p className="sub">{t.sets.pdfHint}</p>
       </details>
 
       {groups.length === 0 ? (

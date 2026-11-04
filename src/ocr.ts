@@ -403,6 +403,14 @@ function splitChoicesFromText(text: string): { question: string; choices: Record
 
 /* ---------- main ---------- */
 
+/** Plain text of a whole rendered page (scanned-PDF import). Paragraphs come back separated by blank lines. */
+export async function ocrPageText(page: HTMLCanvasElement): Promise<string> {
+  const worker = await getWorker()
+  await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO })
+  const { data } = await worker.recognize(page, {}, { text: true })
+  return data.text
+}
+
 export async function ocrScreenshot(dataUrl: string, progress: OcrProgress = () => {}): Promise<OcrResult> {
   progress('engine')
   const worker = await getWorker()

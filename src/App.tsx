@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { I18nProvider, LanguageToggle, useI18n } from './i18n'
 import { importErrorDetail } from './messages'
 import { StoreProvider, useStore } from './store'
+import { usePracticeImport } from './components/PracticeImport'
 import { MistakesPage } from './pages/MistakesPage'
 import { SetsPage } from './pages/SetsPage'
 import { PracticePage } from './pages/PracticePage'
@@ -19,12 +20,15 @@ function readHash(): PageId {
 }
 
 function Shell() {
-  const { ready, words, exportBackup, importBackup, importPracticeSet } = useStore()
+  const { ready, words, exportBackup, importBackup } = useStore()
   const { t } = useI18n()
   const [page, setPage] = useState<PageId>(readHash)
   const [inExam, setInExam] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const setFileRef = useRef<HTMLInputElement>(null)
+  const setImport = usePracticeImport((r) => {
+    location.hash = 'sets'
+    alert(t.backup.practiceImport(r))
+  })
 
   useEffect(() => {
     const onHash = () => setPage(readHash())
@@ -65,7 +69,7 @@ function Shell() {
             <button className="btn ghost small" onClick={() => fileRef.current?.click()} title={t.backup.importTitle}>
               {t.backup.import}
             </button>
-            <button className="btn ghost small" onClick={() => setFileRef.current?.click()} title={t.backup.importSetTitle}>
+            <button className="btn ghost small" onClick={setImport.open} title={t.backup.importSetTitle}>
               {t.backup.importSet}
             </button>
             <input
@@ -85,24 +89,7 @@ function Shell() {
                 }
               }}
             />
-            <input
-              ref={setFileRef}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={async (e) => {
-                const f = e.target.files?.[0]
-                e.target.value = ''
-                if (!f) return
-                try {
-                  const r = await importPracticeSet(f)
-                  location.hash = 'sets'
-                  alert(t.backup.practiceImport(r))
-                } catch (err) {
-                  alert(t.backup.failed(importErrorDetail(err, t)))
-                }
-              }}
-            />
+            {setImport.ui}
           </div>
         </header>
       )}
