@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { StoreProvider, useStore } from './store'
+import { formatPracticeImport } from './importPractice'
 import { MistakesPage } from './pages/MistakesPage'
+import { SetsPage } from './pages/SetsPage'
 import { PracticePage } from './pages/PracticePage'
 import { VocabPage } from './pages/VocabPage'
 import { FlashcardsPage } from './pages/FlashcardsPage'
@@ -9,6 +11,7 @@ import { isDue } from './srs'
 
 const PAGES = [
   { id: 'mistakes', label: '错题本' },
+  { id: 'sets', label: '题集' },
   { id: 'practice', label: '重做练习' },
   { id: 'vocab', label: '单词本' },
   { id: 'cards', label: '闪卡复习' },
@@ -22,10 +25,11 @@ function readHash(): PageId {
 }
 
 function Shell() {
-  const { ready, words, exportBackup, importBackup } = useStore()
+  const { ready, words, exportBackup, importBackup, importPracticeSet } = useStore()
   const [page, setPage] = useState<PageId>(readHash)
   const [inExam, setInExam] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const setFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const onHash = () => setPage(readHash())
@@ -51,11 +55,14 @@ function Shell() {
             ))}
           </nav>
           <div className="nav-actions">
-            <button className="btn ghost small" onClick={exportBackup} title="把所有错题和单词下载成一个 JSON 文件">
+            <button className="btn ghost small" onClick={exportBackup} title="把错题、题集和单词下载成一个 JSON 文件">
               导出备份
             </button>
-            <button className="btn ghost small" onClick={() => fileRef.current?.click()}>
+            <button className="btn ghost small" onClick={() => fileRef.current?.click()} title="恢复错题和单词。不会把题集文件写进错题本。">
               导入备份
+            </button>
+            <button className="btn ghost small" onClick={() => setFileRef.current?.click()} title="把 JSON 题目导入为练习题集，不记入错题">
+              导入题集
             </button>
             <input
               ref={fileRef}
@@ -68,7 +75,29 @@ function Shell() {
                 if (!f) return
                 try {
                   const r = await importBackup(f)
-                  alert(`导入完成：${r.mistakes} 道错题，${r.words} 个单词`)
+                  alert(
+                    r.practice
+                      ? `导入完成：${r.mistakes} 道错题，${r.practice} 道题集题目，${r.words} 个单词`
+                      : `导入完成：${r.mistakes} 道错题，${r.words} 个单词`,
+                  )
+                } catch (err) {
+                  alert(`导入失败：${(err as Error).message}`)
+                }
+              }}
+            />
+            <input
+              ref={setFileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (!f) return
+                try {
+                  const r = await importPracticeSet(f)
+                  location.hash = 'sets'
+                  alert(formatPracticeImport(r))
                 } catch (err) {
                   alert(`导入失败：${(err as Error).message}`)
                 }
@@ -79,6 +108,7 @@ function Shell() {
       )}
       <main className={inExam ? 'main exam-main' : 'main'}>
         {page === 'mistakes' && <MistakesPage />}
+        {page === 'sets' && <SetsPage onExamChange={setInExam} />}
         {page === 'practice' && <PracticePage onExamChange={setInExam} />}
         {page === 'vocab' && <VocabPage />}
         {page === 'cards' && <FlashcardsPage />}

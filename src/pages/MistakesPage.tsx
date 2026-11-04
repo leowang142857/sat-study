@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Mistake, Section } from '../types'
 import { LETTERS } from '../types'
 import { QUESTION_TYPES, typeLabel } from '../constants'
+import { isPracticeItem } from '../questions'
 import { useStore } from '../store'
 import { MistakeEditor, blankMistake } from '../components/MistakeEditor'
 import { RichText } from '../components/RichText'
@@ -9,7 +10,8 @@ import { RichText } from '../components/RichText'
 type Status = 'all' | 'open' | 'mastered'
 
 export function MistakesPage() {
-  const { mistakes, saveMistake, deleteMistake } = useStore()
+  const { mistakes: all, saveMistake, deleteMistake } = useStore()
+  const mistakes = all.filter((m) => !isPracticeItem(m))
   const [editing, setEditing] = useState<{ m: Mistake; isNew: boolean } | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [q, setQ] = useState('')

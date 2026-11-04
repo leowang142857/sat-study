@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import type { Section } from '../types'
 import { QUESTION_TYPES } from '../constants'
+import { isPracticeItem } from '../questions'
 import { useStore } from '../store'
 import { isDue } from '../srs'
 
 const DAY = 86400000
 
 export function StatsPage() {
-  const { mistakes, words } = useStore()
+  const { mistakes: all, words } = useStore()
+  const mistakes = all.filter((m) => !isPracticeItem(m))
+  const practiceCount = all.length - mistakes.length
   const [section, setSection] = useState<Section>('RW')
 
   const inSection = mistakes.filter((m) => m.section === section)
@@ -65,7 +68,10 @@ export function StatsPage() {
       <div className="page-head">
         <div>
           <h1>统计</h1>
-          <p className="sub">{weakest ? `目前最该练的题型：${weakest.label}（${weakest.open} 道未掌握）` : '还没有未掌握的错题'}</p>
+          <p className="sub">
+            {weakest ? `目前最该练的题型：${weakest.label}（${weakest.open} 道未掌握）` : '还没有未掌握的错题'}
+            {practiceCount > 0 && ` · 另有 ${practiceCount} 道题集题目，不计入错题`}
+          </p>
         </div>
         <div className="seg">
           {(['RW', 'Math'] as Section[]).map((s) => (
