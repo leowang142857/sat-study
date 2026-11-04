@@ -60,7 +60,7 @@ function itemsToLines(items: TextItem[]): string[] {
 
 function usefulTitle(info: unknown): string {
   const title = typeof (info as { Title?: unknown })?.Title === 'string' ? ((info as { Title: string }).Title).trim() : ''
-  if (!title || /^(untitled|microsoft word\b|document\d*$)/i.test(title) || /\.(docx?|pdf|pages)$/i.test(title)) return ''
+  if (!title || /^(untitled|microsoft word\b|document\d*$)/i.test(title) || /\.[a-z0-9]{2,5}$/i.test(title)) return ''
   return title
 }
 

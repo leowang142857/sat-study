@@ -50,7 +50,8 @@ const CHOICE_BARE = /^([A-D])\s+(.+)$/
 const ANSWER_LINE = new RegExp(String.raw`^(?:correct\s*answer|answer|ans\.?|key|答案|正确答案)\s*[:：.\-]?\s*(?:choice\s*)?\(?${ANSWER}\)?(?=$|[\s.;,])(.*)$`, 'i')
 const ANSWER_TAIL = new RegExp(String.raw`\s(?:correct\s*answer|answer|答案)\s*[:：]\s*\(?${ANSWER}\)?\s*$`, 'i')
 const EXPLANATION = /^(?:explanation|rationale|solution|解析)\s*[:：]?\s*(.*)$/i
-const KEY_PAIR = new RegExp(String.raw`(?:^|[\s,;])(\d{1,3})\s*[.):\-–]?\s*\(?${ANSWER}\)?(?=$|[\s,;])`, 'g')
+// OCR often drops the spaces in a key ("1.B2.C"), so a letter answer may run straight into the next number.
+const KEY_PAIR = /(?:^|(?<=[\s,;A-D)]))(\d{1,3})\s*[.):\-–]?\s*\(?([A-D](?=$|[\s,;)]|\d)|-?\d+(?:[./]\d+)?(?=$|[\s,;)]))\)?/g
 const KEY_QUESTION = /^question\s*(\d{1,3})\b/i
 const KEY_CHOICE = /choice\s*\(?([A-D])\)?\s*is\s*(?:the\s*)?(?:best|correct)/i
 const KEY_CORRECT = new RegExp(String.raw`correct\s*answer\s*is\s*\(?(?:choice\s*)?${ANSWER}\)?`, 'i')
@@ -94,9 +95,12 @@ function questionStart(line: string): { n: number; text: string; bare: boolean }
   return b ? { n: Number(b[1]), text: '', bare: true } : null
 }
 
+/** Tesseract reads circled or parenthesized choice letters as these symbols. */
+const OCR_LETTERS: Record<string, Letter> = { '@': 'A', '®': 'B', '©': 'C' }
+
 /** Drop running headers/footers and page numbers so they don't land inside questions. */
 function cleanPages(pages: string[][]): string[][] {
-  const trimmed = pages.map((p) => p.map((l) => l.replace(/\s+/g, ' ').trim()))
+  const trimmed = pages.map((p) => p.map((l) => l.replace(/\s+/g, ' ').trim().replace(/^\(?([@®©])\)?(?=\s|$)|^([@®©])\)/, (_, a, b) => `${OCR_LETTERS[a ?? b]})`)))
   const repeated = new Set<string>()
   if (trimmed.length >= 3) {
     const counts = new Map<string, number>()
